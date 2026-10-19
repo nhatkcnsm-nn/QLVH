@@ -274,7 +274,7 @@ input[type="number"]{-moz-appearance:textfield}
     </ul>
   </nav>
   <div class="p-4 text-xs text-center text-slate-400 border-t border-slate-100 flex items-center justify-between">
-    <span><i class="fas fa-cloud text-emerald-500 mr-1"></i> Cloud Sync</span>
+    <span id="sync-text"><i class="fas fa-cloud text-emerald-500 mr-1"></i> Cloud Sync</span>
     <span class="bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded text-[10px]">Hoạt động</span>
   </div>
 </aside>
@@ -1280,6 +1280,7 @@ input[type="number"]{-moz-appearance:textfield}
     'xlnt_maintenance', 'xlnt_sludge', 'xlnt_oplogs', 
     'xlnt_bm04_custom_tasks', 'xlnt_bm06_custom_tasks', 'songmay_tqt_log_v1'
   ];
+  let syncDoneCount = 0;
 
   // Hàm đẩy dữ liệu lên Firebase khi lưu
   window.pushToFirebase = async function(key, val) {
@@ -1296,9 +1297,17 @@ input[type="number"]{-moz-appearance:textfield}
 
   // Hàm Lắng nghe thời gian thực (Tự động đồng bộ giữa các máy)
   window.initFirebaseSync = function() {
+    const syncTextEl = document.getElementById('sync-text');
+    if (syncTextEl) syncTextEl.innerHTML = '<i class="fas fa-spinner fa-spin text-blue-500 mr-1"></i> Đang tải...';
+
     SYNC_KEYS.forEach(key => {
       const docRef = doc(db, "songmay_data", key);
       onSnapshot(docRef, (docSnap) => {
+        syncDoneCount++;
+        if (syncDoneCount >= SYNC_KEYS.length && syncTextEl) {
+          syncTextEl.innerHTML = '<i class="fas fa-cloud text-emerald-500 mr-1"></i> Đã đồng bộ';
+        }
+
         if (docSnap.exists()) {
           const cloudData = docSnap.data().data;
           const localStr = localStorage.getItem(key);
@@ -1387,7 +1396,14 @@ const COST_WARNING_TEXT = 'Đây là chi phí gần đúng nhằm mục đích t
 function generateId() { return Date.now().toString(36) + Math.random().toString(36).substring(2, 7); }
 function getStorage(key, defaultVal) {
   if (defaultVal === undefined) defaultVal = [];
-  try { const data = localStorage.getItem(key); return data ? JSON.parse(data) : defaultVal; } catch (e) { return defaultVal; }
+  try { 
+    const data = localStorage.getItem(key); 
+    if (!data) return defaultVal;
+    const parsed = JSON.parse(data);
+    // Đảm bảo nếu yêu cầu mảng thì phải trả về mảng (tránh lỗi dữ liệu cũ bị lưu thành object)
+    if (Array.isArray(defaultVal) && !Array.isArray(parsed)) return defaultVal;
+    return parsed;
+  } catch (e) { return defaultVal; }
 }
 function setStorage(key, val) { 
   localStorage.setItem(key, JSON.stringify(val)); 
@@ -3191,30 +3207,54 @@ function refreshTabData(target) {
 }
 
 // Hàm tự động vẽ lại giao diện khi có dữ liệu mới từ máy khác gửi tới
+let syncTimeout;
 window.refreshAllUI = function() {
-  try {
-    // 1. Luôn cập nhật Dashboard và Cài đặt ngầm
-    if (typeof updateDashboard === 'function') updateDashboard();
-    if (typeof loadSettings === 'function') loadSettings();
-    
-    // 2. Chỉ cập nhật các bảng của tab đang mở (tránh làm mất dữ liệu đang gõ)
-    var activeMenu = document.querySelector('.menu-item.active');
-    if (activeMenu) {
-      var target = activeMenu.getAttribute('data-target');
-      if (target === 'bm01') renderBM01Table();
-      else if (target === 'bm02') { renderBM02Table(); if (typeof onBM02DateChange === 'function') onBM02DateChange(); }
-      else if (target === 'bm03') renderBM03List();
-      else if (target === 'bm04') renderBM04Table();
-      else if (target === 'bm05') { recalculateSludgeChain(); renderBM05Table(); }
-      else if (target === 'bm06') renderBM06Table();
-      else if (target === 'bm07') generateBM07();
-      else if (target === 'bm08') generateBM08();
-      else if (target === 'bm09') generateBM09();
-      else if (target === 'tqt') { if (window.tqtRefresh) window.tqtRefresh(); }
+  clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(() => {
+    try {
+      var activeMenu = document.querySelector('.menu-item.active');
+      var target = activeMenu ? activeMenu.getAttribute('data-target') : 'dashboard';
+      
+      if (target === 'dashboard') {
+        updateDashboard();
+      } else if (target === 'bm01') {
+        renderBM01Table();
+        updateBM01TapWaterHint();
+      } else if (target === 'bm02') {
+        renderBM02Form();
+        renderBM02Table();
+        onBM02DateChange();
+      } else if (target === 'bm03') {
+        renderBM03List();
+      } else if (target === 'bm04') {
+        renderBM04Table();
+        generateBM04Tasks();
+      } else if (target === 'bm05') {
+        recalculateSludgeChain();
+        renderBM05Table();
+        onBM05DateChange();
+      } else if (target === 'bm06') {
+        renderBM06Table();
+      } else if (target === 'bm07') {
+        generateBM07();
+      } else if (target === 'bm08') {
+        generateBM08();
+      } else if (target === 'bm09') {
+        generateBM09();
+      } else if (target === 'tqt') {
+        if (window.tqtRefresh) window.tqtRefresh();
+      } else if (target === 'settings') {
+        loadSettings();
+      }
+      
+      // Luôn cập nhật Dashboard ngầm để số liệu tổng hợp mới nhất
+      if (target !== 'dashboard') {
+        updateDashboard();
+      }
+    } catch(e) {
+      console.log("Đang chờ giao diện tải xong...", e);
     }
-  } catch(e) {
-    console.log("Đang chờ giao diện tải xong...", e);
-  }
+  }, 300); // 300ms debounce
 };
 
 document.addEventListener('DOMContentLoaded', function() {
