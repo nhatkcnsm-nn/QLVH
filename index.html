@@ -1258,7 +1258,7 @@ input[type="number"]{-moz-appearance:textfield}
 <!-- Firebase SDK Integration (Bắt đầu) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   // Cấu hình Firebase của bạn
   const firebaseConfig = {
@@ -1275,52 +1275,54 @@ input[type="number"]{-moz-appearance:textfield}
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
-  // Hàm đẩy dữ liệu lên Firebase
+  const SYNC_KEYS = [
+    'xlnt_settings', 'xlnt_handovers', 'xlnt_chemicals', 'xlnt_watertests', 
+    'xlnt_maintenance', 'xlnt_sludge', 'xlnt_oplogs', 
+    'xlnt_bm04_custom_tasks', 'xlnt_bm06_custom_tasks', 'songmay_tqt_log_v1'
+  ];
+
+  // Hàm đẩy dữ liệu lên Firebase khi lưu
   window.pushToFirebase = async function(key, val) {
     try {
       await setDoc(doc(db, "songmay_data", key), {
         data: val,
         updatedAt: new Date().toISOString()
       });
-      console.log("Đã đồng bộ lên mây:", key);
+      console.log("Đã lưu lên mây:", key);
     } catch (e) {
-      console.error("Lỗi đồng bộ lên mây:", e);
+      console.error("Lỗi lưu mây:", e);
     }
   };
 
-  // Hàm kéo dữ liệu từ Firebase về
-  window.pullFromFirebase = async function() {
-    const keys = [
-      'xlnt_settings', 'xlnt_handovers', 'xlnt_chemicals', 'xlnt_watertests', 
-      'xlnt_maintenance', 'xlnt_sludge', 'xlnt_oplogs', 
-      'xlnt_bm04_custom_tasks', 'xlnt_bm06_custom_tasks', 'songmay_tqt_log_v1'
-    ];
-    let hasData = false;
-    
-    for (let key of keys) {
-      try {
-        const docSnap = await getDoc(doc(db, "songmay_data", key));
+  // Hàm Lắng nghe thời gian thực (Tự động đồng bộ giữa các máy)
+  window.initFirebaseSync = function() {
+    SYNC_KEYS.forEach(key => {
+      const docRef = doc(db, "songmay_data", key);
+      onSnapshot(docRef, (docSnap) => {
         if (docSnap.exists()) {
           const cloudData = docSnap.data().data;
-          localStorage.setItem(key, JSON.stringify(cloudData));
-          hasData = true;
+          const localStr = localStorage.getItem(key);
+          const newStr = JSON.stringify(cloudData);
+
+          // Chỉ cập nhật nếu dữ liệu thực sự có sự thay đổi từ máy khác
+          if (localStr !== newStr) {
+            localStorage.setItem(key, newStr);
+            console.log("Nhận dữ liệu mới từ mây:", key);
+
+            // Kích hoạt hàm cập nhật giao diện ngay lập tức
+            if (typeof window.refreshAllUI === 'function') {
+              window.refreshAllUI();
+            }
+          }
         }
-      } catch (e) {
-        console.error("Lỗi tải dữ liệu từ mây:", e);
-      }
-    }
-    
-    if (hasData) {
-      // Chỉ tải lại trang 1 lần để tránh lặp vô hạn
-      if (!sessionStorage.getItem("reloaded_from_cloud")) {
-        sessionStorage.setItem("reloaded_from_cloud", "true");
-        location.reload();
-      }
-    }
+      }, (error) => {
+        console.error("Lỗi kết nối:", error);
+      });
+    });
   };
 
-  // Kích hoạt kéo dữ liệu ngay khi mở web
-  window.pullFromFirebase();
+  // Kích hoạt lắng nghe ngay khi mở web
+  window.initFirebaseSync();
 </script>
 <!-- Firebase SDK Integration (Kết thúc) -->
 
@@ -3187,6 +3189,33 @@ function refreshTabData(target) {
   else if (target === 'tqt') { if (window.tqtRefresh) window.tqtRefresh(); }
   else if (target === 'settings') loadSettings();
 }
+
+// Hàm tự động vẽ lại giao diện khi có dữ liệu mới từ máy khác gửi tới
+window.refreshAllUI = function() {
+  try {
+    // 1. Luôn cập nhật Dashboard và Cài đặt ngầm
+    if (typeof updateDashboard === 'function') updateDashboard();
+    if (typeof loadSettings === 'function') loadSettings();
+    
+    // 2. Chỉ cập nhật các bảng của tab đang mở (tránh làm mất dữ liệu đang gõ)
+    var activeMenu = document.querySelector('.menu-item.active');
+    if (activeMenu) {
+      var target = activeMenu.getAttribute('data-target');
+      if (target === 'bm01') renderBM01Table();
+      else if (target === 'bm02') { renderBM02Table(); if (typeof onBM02DateChange === 'function') onBM02DateChange(); }
+      else if (target === 'bm03') renderBM03List();
+      else if (target === 'bm04') renderBM04Table();
+      else if (target === 'bm05') { recalculateSludgeChain(); renderBM05Table(); }
+      else if (target === 'bm06') renderBM06Table();
+      else if (target === 'bm07') generateBM07();
+      else if (target === 'bm08') generateBM08();
+      else if (target === 'bm09') generateBM09();
+      else if (target === 'tqt') { if (window.tqtRefresh) window.tqtRefresh(); }
+    }
+  } catch(e) {
+    console.log("Đang chờ giao diện tải xong...", e);
+  }
+};
 
 document.addEventListener('DOMContentLoaded', function() {
   var today = new Date().toISOString().split('T')[0];
