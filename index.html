@@ -274,7 +274,7 @@ input[type="number"]{-moz-appearance:textfield}
     </ul>
   </nav>
   <div class="p-4 text-xs text-center text-slate-400 border-t border-slate-100 flex items-center justify-between">
-    <span><i class="fas fa-database text-emerald-500 mr-1"></i> LocalStorage</span>
+    <span><i class="fas fa-cloud text-emerald-500 mr-1"></i> Cloud Sync</span>
     <span class="bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded text-[10px]">Hoạt động</span>
   </div>
 </aside>
@@ -1255,6 +1255,75 @@ input[type="number"]{-moz-appearance:textfield}
   </div>
 </div>
 
+<!-- Firebase SDK Integration (Bắt đầu) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  // Cấu hình Firebase của bạn
+  const firebaseConfig = {
+    apiKey: "AIzaSyDq13o2UoTVFY58ARpQFN_EzadGe8dUkTw",
+    authDomain: "nmxlntsm.firebaseapp.com",
+    databaseURL: "https://nmxlntsm-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "nmxlntsm",
+    storageBucket: "nmxlntsm.firebasestorage.app",
+    messagingSenderId: "683501593781",
+    appId: "1:683501593781:web:4feeb5b3d56fa5f51ccafc",
+    measurementId: "G-YD9VYWCKDF"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // Hàm đẩy dữ liệu lên Firebase
+  window.pushToFirebase = async function(key, val) {
+    try {
+      await setDoc(doc(db, "songmay_data", key), {
+        data: val,
+        updatedAt: new Date().toISOString()
+      });
+      console.log("Đã đồng bộ lên mây:", key);
+    } catch (e) {
+      console.error("Lỗi đồng bộ lên mây:", e);
+    }
+  };
+
+  // Hàm kéo dữ liệu từ Firebase về
+  window.pullFromFirebase = async function() {
+    const keys = [
+      'xlnt_settings', 'xlnt_handovers', 'xlnt_chemicals', 'xlnt_watertests', 
+      'xlnt_maintenance', 'xlnt_sludge', 'xlnt_oplogs', 
+      'xlnt_bm04_custom_tasks', 'xlnt_bm06_custom_tasks', 'songmay_tqt_log_v1'
+    ];
+    let hasData = false;
+    
+    for (let key of keys) {
+      try {
+        const docSnap = await getDoc(doc(db, "songmay_data", key));
+        if (docSnap.exists()) {
+          const cloudData = docSnap.data().data;
+          localStorage.setItem(key, JSON.stringify(cloudData));
+          hasData = true;
+        }
+      } catch (e) {
+        console.error("Lỗi tải dữ liệu từ mây:", e);
+      }
+    }
+    
+    if (hasData) {
+      // Chỉ tải lại trang 1 lần để tránh lặp vô hạn
+      if (!sessionStorage.getItem("reloaded_from_cloud")) {
+        sessionStorage.setItem("reloaded_from_cloud", "true");
+        location.reload();
+      }
+    }
+  };
+
+  // Kích hoạt kéo dữ liệu ngay khi mở web
+  window.pullFromFirebase();
+</script>
+<!-- Firebase SDK Integration (Kết thúc) -->
+
 <script>
 // ============================================================
 // HỆ THỐNG XỬ LÝ SỰ KIỆN VÀ DỮ LIỆU (QLVH)
@@ -1318,7 +1387,13 @@ function getStorage(key, defaultVal) {
   if (defaultVal === undefined) defaultVal = [];
   try { const data = localStorage.getItem(key); return data ? JSON.parse(data) : defaultVal; } catch (e) { return defaultVal; }
 }
-function setStorage(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+function setStorage(key, val) { 
+  localStorage.setItem(key, JSON.stringify(val)); 
+  // Tự động đẩy lên Firebase
+  if (window.pushToFirebase) {
+    window.pushToFirebase(key, val);
+  }
+}
 function formatNum(num) { if (num === null || num === undefined || isNaN(num)) return '0'; return Number(num).toLocaleString('vi-VN'); }
 function parseNumOrNull(val) { if (val === '' || val === null || val === undefined) return null; var n = parseFloat(val); return isNaN(n) ? null : n; }
 
@@ -1378,7 +1453,12 @@ function toggleSidebar() {
 }
 
 function getCustomTasks(key) { try { return JSON.parse(localStorage.getItem(key)) || []; } catch (e) { return []; } }
-function setCustomTasks(key, tasks) { localStorage.setItem(key, JSON.stringify(tasks)); }
+function setCustomTasks(key, tasks) { 
+  localStorage.setItem(key, JSON.stringify(tasks)); 
+  if (window.pushToFirebase) {
+    window.pushToFirebase(key, tasks);
+  }
+}
 
 function isTapWaterCalcRecord(rec) {
   if (!rec) return false;
@@ -2701,7 +2781,10 @@ function importBackup(e) {
   reader.onload = function(evt) {
     try {
       var data = JSON.parse(evt.target.result);
-      Object.keys(data).forEach(k => { localStorage.setItem(k, JSON.stringify(data[k])); });
+      Object.keys(data).forEach(k => { 
+        localStorage.setItem(k, JSON.stringify(data[k])); 
+        if (window.pushToFirebase) window.pushToFirebase(k, data[k]);
+      });
       showToast('Phục hồi thành công! Đang tải lại...', 'success');
       setTimeout(() => { location.reload(); }, 1500);
     } catch (err) { showToast('File backup không hợp lệ!', 'error'); }
@@ -3273,7 +3356,13 @@ document.addEventListener('DOMContentLoaded', function() {
   function tqtScheduleSave() {
     clearTimeout(tqtSaveTimer);
     tqtSaveTimer = setTimeout(function() {
-      try { localStorage.setItem(TQT_STORAGE_KEY, JSON.stringify(tqtStore)); tqtFlashStatus(); }
+      try { 
+        localStorage.setItem(TQT_STORAGE_KEY, JSON.stringify(tqtStore)); 
+        if (window.pushToFirebase) {
+          window.pushToFirebase(TQT_STORAGE_KEY, tqtStore);
+        }
+        tqtFlashStatus(); 
+      }
       catch(e) { console.warn('TQT: Không lưu được:', e); }
     }, 300);
   }
