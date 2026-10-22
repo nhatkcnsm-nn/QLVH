@@ -82,9 +82,6 @@ input[type="number"]{-moz-appearance:textfield}
 .daily-stats-table th{white-space:nowrap;font-size:.68rem}
 .daily-stats-table td{font-size:.75rem}
 
-/* ===================================================== */
-/* ============ TQT — SỔ VẬN HÀNH TRẠM QUAN TRẮC ======= */
-/* ===================================================== */
 #tqt {
   --tqt-pri:#0b5fa5; --tqt-pri-d:#084a80; --tqt-bd:#dbe3ea;
   --tqt-x-bg:#e6f4ea; --tqt-x-fg:#137333;
@@ -274,8 +271,8 @@ input[type="number"]{-moz-appearance:textfield}
     </ul>
   </nav>
   <div class="p-4 text-xs text-center text-slate-400 border-t border-slate-100 flex items-center justify-between">
-    <span id="sync-text"><i class="fas fa-cloud text-emerald-500 mr-1"></i> Cloud Sync</span>
-    <span class="bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded text-[10px]">Hoạt động</span>
+    <span id="sync-text"><i class="fas fa-spinner fa-spin text-blue-500 mr-1"></i> Đang kết nối...</span>
+    <span class="bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded text-[10px]">Cloud Sync</span>
   </div>
 </aside>
 
@@ -502,7 +499,7 @@ input[type="number"]{-moz-appearance:textfield}
       <div class="w-full sm:w-48"><label class="block text-xs font-semibold text-slate-700 mb-1">Ca *</label><select id="bm02-shift" onchange="onBM02DateChange()" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"><option>Ca 1</option><option>Ca 2</option><option>Ca 3</option></select></div>
       <p class="text-xs text-blue-700 flex items-center mt-4 sm:mt-0"><i class="fas fa-info-circle mr-1.5 text-blue-500"></i> Tồn đầu lấy từ cài đặt hoặc ca trước. Công thức: <b>Tồn cuối = Tồn đầu + Nhập - Xuất</b></p>
     </div>
-    <div id="bm02-lock-hint" class="mb-3 text-xs"><span class="text-slate-500"><i class="fas fa-lock mr-1"></i> Tồn đầu đang bị khóa. Nhấn biểu tượng ổ khóa và nhập mật khẩu để mở khóa.</span></div>
+    <div id="bm02-lock-hint" class="mb-3 text-xs"><span class="text-slate-500"><i class="fas fa-lock mr-1"></i> Tồn đầu đang bị khóa. Nhấn biểu tượng ổ khóa để mở khóa.</span></div>
     <div class="table-container overflow-x-auto rounded-lg border border-slate-200 mb-5">
       <table class="w-full text-sm text-left">
         <thead class="bg-slate-100 text-slate-700 font-semibold">
@@ -1140,7 +1137,7 @@ input[type="number"]{-moz-appearance:textfield}
       <button onclick="exportBackup()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold flex items-center"><i class="fas fa-download mr-2"></i> Xuất Backup JSON</button>
       <label class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold flex items-center cursor-pointer"><i class="fas fa-upload mr-2"></i> Phục hồi Dữ liệu<input type="file" id="import-file" class="hidden" accept=".json" onchange="importBackup(event)"></label>
     </div>
-    <p class="text-xs text-slate-400 mt-3"><i class="fas fa-info-circle mr-1"></i> File JSON bao gồm tất cả dữ liệu các biểu mẫu.</p>
+    <p class="text-xs text-slate-400 mt-3"><i class="fas fa-info-circle mr-1"></i> File JSON bao gồm tất cả dữ liệu các biểu mẫu, cài đặt đơn giá, và sổ vận hành TQT.</p>
   </div>
 </section>
 
@@ -1255,12 +1252,13 @@ input[type="number"]{-moz-appearance:textfield}
   </div>
 </div>
 
-<!-- Firebase SDK Integration (Bắt đầu) -->
+<!-- ============================================ -->
+<!-- FIREBASE MODULE (FIXED SYNC)                 -->
+<!-- ============================================ -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-  // Cấu hình Firebase của bạn
   const firebaseConfig = {
     apiKey: "AIzaSyDq13o2UoTVFY58ARpQFN_EzadGe8dUkTw",
     authDomain: "nmxlntsm.firebaseapp.com",
@@ -1276,68 +1274,84 @@ input[type="number"]{-moz-appearance:textfield}
   const db = getFirestore(app);
 
   const SYNC_KEYS = [
-    'xlnt_settings', 'xlnt_handovers', 'xlnt_chemicals', 'xlnt_watertests', 
-    'xlnt_maintenance', 'xlnt_sludge', 'xlnt_oplogs', 
+    'xlnt_settings', 'xlnt_handovers', 'xlnt_chemicals', 'xlnt_watertests',
+    'xlnt_maintenance', 'xlnt_sludge', 'xlnt_oplogs',
     'xlnt_bm04_custom_tasks', 'xlnt_bm06_custom_tasks', 'songmay_tqt_log_v1'
   ];
-  let syncDoneCount = 0;
+  const syncDoneSet = new Set();
 
-  // Hàm đẩy dữ liệu lên Firebase khi lưu
+  function setSyncStatus(html) {
+    var el = document.getElementById('sync-text');
+    if (el) el.innerHTML = html;
+  }
+
   window.pushToFirebase = async function(key, val) {
     try {
+      var updatedAt = localStorage.getItem(key + '_updatedAt') || new Date().toISOString();
       await setDoc(doc(db, "songmay_data", key), {
         data: val,
-        updatedAt: new Date().toISOString()
+        updatedAt: updatedAt
       });
-      console.log("Đã lưu lên mây:", key);
+      if (syncDoneSet.size >= SYNC_KEYS.length) {
+        setSyncStatus('<i class="fas fa-cloud text-emerald-500 mr-1"></i> Đã đồng bộ');
+      }
     } catch (e) {
-      console.error("Lỗi lưu mây:", e);
+      console.error("Lỗi lưu mây:", key, e);
+      setSyncStatus('<i class="fas fa-exclamation-triangle text-rose-500 mr-1"></i> Lỗi đồng bộ');
     }
   };
 
-  // Hàm Lắng nghe thời gian thực (Tự động đồng bộ giữa các máy)
   window.initFirebaseSync = function() {
-    const syncTextEl = document.getElementById('sync-text');
-    if (syncTextEl) syncTextEl.innerHTML = '<i class="fas fa-spinner fa-spin text-blue-500 mr-1"></i> Đang tải...';
-
+    setSyncStatus('<i class="fas fa-spinner fa-spin text-blue-500 mr-1"></i> Đang tải...');
+    
     SYNC_KEYS.forEach(key => {
       const docRef = doc(db, "songmay_data", key);
       onSnapshot(docRef, (docSnap) => {
-        syncDoneCount++;
-        if (syncDoneCount >= SYNC_KEYS.length && syncTextEl) {
-          syncTextEl.innerHTML = '<i class="fas fa-cloud text-emerald-500 mr-1"></i> Đã đồng bộ';
+        syncDoneSet.add(key);
+        if (syncDoneSet.size >= SYNC_KEYS.length) {
+          setSyncStatus('<i class="fas fa-cloud text-emerald-500 mr-1"></i> Đã đồng bộ');
         }
 
-        if (docSnap.exists()) {
+        if (!docSnap.exists()) return;
+        
+        try {
           const cloudData = docSnap.data().data;
-          const localStr = localStorage.getItem(key);
-          const newStr = JSON.stringify(cloudData);
+          const cloudUpdatedAt = docSnap.data().updatedAt || '';
+          const localUpdatedAt = localStorage.getItem(key + '_updatedAt') || '';
 
-          // Chỉ cập nhật nếu dữ liệu thực sự có sự thay đổi từ máy khác
-          if (localStr !== newStr) {
-            localStorage.setItem(key, newStr);
-            console.log("Nhận dữ liệu mới từ mây:", key);
-
-            // Kích hoạt hàm cập nhật giao diện ngay lập tức
-            if (typeof window.refreshAllUI === 'function') {
-              window.refreshAllUI();
+          // BẢO VỆ DỮ LIỆU: Chỉ nhận dữ liệu mây nếu mây MỚI HƠN máy tính
+          if (!localUpdatedAt || (cloudUpdatedAt && cloudUpdatedAt > localUpdatedAt)) {
+            const newStr = JSON.stringify(cloudData);
+            if (localStorage.getItem(key) !== newStr) {
+              localStorage.setItem(key, newStr);
+              localStorage.setItem(key + '_updatedAt', cloudUpdatedAt);
+              console.log("⬇️ Nhận dữ liệu mới từ mây:", key, "@", cloudUpdatedAt);
+              if (typeof window.refreshAllUI === 'function') {
+                window.refreshAllUI();
+              }
             }
           }
+        } catch(e) {
+          console.warn("Snapshot handler error:", key, e);
         }
       }, (error) => {
-        console.error("Lỗi kết nối:", error);
+        syncDoneSet.add(key);
+        if (syncDoneSet.size >= SYNC_KEYS.length) {
+          setSyncStatus('<i class="fas fa-exclamation-triangle text-rose-500 mr-1"></i> Lỗi kết nối');
+        }
       });
     });
   };
 
-  // Kích hoạt lắng nghe ngay khi mở web
   window.initFirebaseSync();
 </script>
-<!-- Firebase SDK Integration (Kết thúc) -->
 
+<!-- ============================================ -->
+<!-- MAIN APP SCRIPT (FIXED CALCULATIONS & SYNC) -->
+<!-- ============================================ -->
 <script>
 // ============================================================
-// HỆ THỐNG XỬ LÝ SỰ KIỆN VÀ DỮ LIỆU (QLVH)
+// HỆ THỐNG XỬ LÝ SỰ KIỆN VÀ DỮ LIỆU (QLVH) — v4 FINAL
 // ============================================================
 const KEYS = {
   settings: 'xlnt_settings', handovers: 'xlnt_handovers', chemicals: 'xlnt_chemicals',
@@ -1347,13 +1361,16 @@ const CHEM_LIST = [
   { key: 'pac', name: 'PAC' }, { key: 'pola', name: 'Polymer-A' }, { key: 'polc', name: 'Polymer-C' },
   { key: 'naoh', name: 'NaOH' }, { key: 'chlorine', name: 'Chlorine' }, { key: 'matri', name: 'Mật rỉ' }
 ];
+
+// ĐÃ CẬP NHẬT SỐ MẶC ĐỊNH THEO YÊU CẦU
 const DEFAULT_SETTINGS = {
-  elec: 2000, tapwater: 15000,
-  pac: 15000, pola: 85000, polc: 95000, naoh: 18000, chlorine: 35000, matri: 8000, sludge: 500,
+  elec: 2280, tapwater: 12075,
+  pac: 7700, pola: 33500, polc: 48000, naoh: 16500, chlorine: 33500, matri: 6800, sludge: 2916,
   initChem: { pac: 0, pola: 0, polc: 0, naoh: 0, chlorine: 0, matri: 0 },
   initSludge: { kg: 0, bags: 0 },
   initTapWater: 0
 };
+
 const DATA_TYPE_LABELS = {
   all: 'Tất cả dữ liệu', handovers: 'BM-01: Giao ca', chemicals: 'BM-02: Hóa chất',
   waterTests: 'BM-03: Test nhanh', maintenance: 'BM-04: Bảo trì', sludge: 'BM-05: Ép bùn', operationLogs: 'BM-06: Nhật ký vận hành'
@@ -1370,6 +1387,19 @@ let excelCurrentType = 'all';
 let wordExportType = null;
 let wordExportFileName = null;
 let bm02StockUnlocked = false;
+
+// HÀM LẤY SỐ AN TOÀN (Không fallback khi giá trị = 0)
+function pickNum(val, fallback) {
+  if (val === undefined || val === null || val === '') return fallback;
+  var n = Number(val);
+  return isNaN(n) ? fallback : n;
+}
+
+// HÀM LẤY NGÀY LOCAL (Tránh lỗi UTC ±1 ngày)
+function todayLocalISO() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
 
 function getShiftOrder(shift) {
   if (!shift) return 0;
@@ -1394,24 +1424,34 @@ const BM06_TASKS = [
 const COST_WARNING_TEXT = 'Đây là chi phí gần đúng nhằm mục đích tham khảo nội bộ, không chính xác 100%.';
 
 function generateId() { return Date.now().toString(36) + Math.random().toString(36).substring(2, 7); }
+
 function getStorage(key, defaultVal) {
   if (defaultVal === undefined) defaultVal = [];
-  try { 
-    const data = localStorage.getItem(key); 
+  try {
+    const data = localStorage.getItem(key);
     if (!data) return defaultVal;
     const parsed = JSON.parse(data);
-    // Đảm bảo nếu yêu cầu mảng thì phải trả về mảng (tránh lỗi dữ liệu cũ bị lưu thành object)
-    if (Array.isArray(defaultVal) && !Array.isArray(parsed)) return defaultVal;
+    if (Array.isArray(defaultVal)) {
+      return Array.isArray(parsed) ? parsed : defaultVal;
+    }
+    if (defaultVal !== null && typeof defaultVal === 'object') {
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return defaultVal;
+      }
+      return parsed;
+    }
     return parsed;
   } catch (e) { return defaultVal; }
 }
-function setStorage(key, val) { 
-  localStorage.setItem(key, JSON.stringify(val)); 
-  // Tự động đẩy lên Firebase
+
+function setStorage(key, val) {
+  localStorage.setItem(key, JSON.stringify(val));
+  localStorage.setItem(key + '_updatedAt', new Date().toISOString()); // Dán nhãn thời gian
   if (window.pushToFirebase) {
     window.pushToFirebase(key, val);
   }
 }
+
 function formatNum(num) { if (num === null || num === undefined || isNaN(num)) return '0'; return Number(num).toLocaleString('vi-VN'); }
 function parseNumOrNull(val) { if (val === '' || val === null || val === undefined) return null; var n = parseFloat(val); return isNaN(n) ? null : n; }
 
@@ -1435,11 +1475,8 @@ function parseMeterInput(str) {
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function showToast(message, type) {
@@ -1471,8 +1508,9 @@ function toggleSidebar() {
 }
 
 function getCustomTasks(key) { try { return JSON.parse(localStorage.getItem(key)) || []; } catch (e) { return []; } }
-function setCustomTasks(key, tasks) { 
-  localStorage.setItem(key, JSON.stringify(tasks)); 
+function setCustomTasks(key, tasks) {
+  localStorage.setItem(key, JSON.stringify(tasks));
+  localStorage.setItem(key + '_updatedAt', new Date().toISOString());
   if (window.pushToFirebase) {
     window.pushToFirebase(key, tasks);
   }
@@ -1509,6 +1547,7 @@ function computeAllTapWaterUsages() {
   }
   return map;
 }
+
 function updateBM01TapWaterHint() {
   var dateEl = document.getElementById('bm01-date');
   var shiftEl = document.getElementById('bm01-shift');
@@ -1544,6 +1583,7 @@ function updateBM01TapWaterHint() {
   hintEl.innerHTML = '<i class="fas fa-calculator mr-1"></i> Kỳ trước (' + escapeHtml(prev.date) + '): <b>' + formatNum(prev.tapWater) + '</b> → <span class="' + cls + ' text-base">' + formatNum(usage) + ' m³</span>';
   hintEl.className = 'reading-hint';
 }
+
 function updateInitTapWaterHint() {
   var el = document.getElementById('init-tapwater');
   var hint = document.getElementById('init-tapwater-hint');
@@ -1582,9 +1622,11 @@ function updateBM02StockLockState() {
     else hint.innerHTML = '<span class="text-slate-500"><i class="fas fa-lock mr-1"></i> Tồn đầu đang bị khóa. Nhấn biểu tượng ổ khóa để mở khóa.</span>';
   }
 }
+
 function recalculateChemChain() {
   var list = getStorage(KEYS.chemicals);
   if (list.length === 0) return;
+  var original = JSON.stringify(list);
   var sorted = [].concat(list).sort(function(a, b) { if (a.date !== b.date) return a.date.localeCompare(b.date); return getShiftOrder(a.shift) - getShiftOrder(b.shift); });
   var prevEnd = null;
   sorted.forEach(function(rec, idx) {
@@ -1603,11 +1645,14 @@ function recalculateChemChain() {
     });
     prevEnd = currentEnd;
   });
-  setStorage(KEYS.chemicals, sorted);
+  if (JSON.stringify(sorted) !== original) {
+    setStorage(KEYS.chemicals, sorted);
+  }
 }
 function recalculateSludgeChain() {
   var list = getStorage(KEYS.sludge);
   if (!Array.isArray(list) || list.length === 0) return;
+  var original = JSON.stringify(list);
   var sorted = list.slice().sort(function(a, b) {
     var dA = String(a.date || ''), dB = String(b.date || '');
     if (dA !== dB) return dA.localeCompare(dB);
@@ -1623,7 +1668,9 @@ function recalculateSludgeChain() {
     var del = parseFloat(rec.delivered); if (isNaN(del)) del = 0;
     rec.start = start; rec.end = start + gen - del; prevEnd = rec.end;
   }
-  setStorage(KEYS.sludge, sorted);
+  if (JSON.stringify(sorted) !== original) {
+    setStorage(KEYS.sludge, sorted);
+  }
 }
 function manualSyncSludge() {
   recalculateSludgeChain(); renderBM05Table(); updateDashboard();
@@ -1719,7 +1766,7 @@ function editBM04(id) {
 function cancelEditBM04() {
   document.getElementById('form-bm04').reset();
   document.getElementById('bm04-edit-id').value = '';
-  document.getElementById('bm04-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('bm04-date').value = todayLocalISO();
   generateBM04Tasks();
   document.getElementById('bm04-other-task').value = '';
   document.getElementById('bm04-mode-badge').innerText = 'Thêm mới';
@@ -1786,7 +1833,7 @@ function saveBM06(e) {
   if (id) { var idx = list.findIndex(x => x.id === id); if (idx !== -1) list[idx] = item; } else { list.unshift(item); }
   setStorage(KEYS.operationLogs, list);
   showToast('Lưu nhật ký vận hành thành công!', 'success');
-  cancelEditBM06(); renderBM06Table();
+  cancelEditBM06(); renderBM06Table(); updateDashboard();
 }
 function renderBM06Table() {
   var list = getStorage(KEYS.operationLogs);
@@ -1817,7 +1864,7 @@ function editBM06(id) {
 function cancelEditBM06() {
   document.getElementById('form-bm06').reset();
   document.getElementById('bm06-edit-id').value = '';
-  document.getElementById('bm06-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('bm06-date').value = todayLocalISO();
   otherTasks06 = getCustomTasks(CUSTOM_TASKS_BM06_KEY);
   updateBM06Checklist();
   document.getElementById('bm06-mode-badge').innerText = 'Thêm mới';
@@ -1828,7 +1875,7 @@ function deleteBM06(id) {
   showConfirm('Xóa nhật ký', 'Bạn có chắc chắn muốn xóa bản ghi này?', () => {
     var list = getStorage(KEYS.operationLogs).filter(x => x.id !== id);
     setStorage(KEYS.operationLogs, list);
-    showToast('Đã xóa', 'success'); renderBM06Table();
+    showToast('Đã xóa', 'success'); renderBM06Table(); updateDashboard();
   });
 }
 
@@ -1911,7 +1958,7 @@ function editBM01(id) {
 function cancelEditBM01() {
   document.getElementById('form-bm01').reset();
   document.getElementById('bm01-edit-id').value = '';
-  document.getElementById('bm01-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('bm01-date').value = todayLocalISO();
   document.getElementById('bm01-mode-badge').innerText = 'Thêm mới';
   document.getElementById('bm01-mode-badge').className = 'bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-1 rounded-full';
   document.getElementById('bm01-btn-cancel').classList.add('hidden');
@@ -2098,7 +2145,7 @@ function saveBM03(e) {
   if (id) { var idx = list.findIndex(x => x.id === id); if (idx !== -1) list[idx] = item; } else { list.unshift(item); }
   setStorage(KEYS.waterTests, list);
   showToast('Lưu kết quả test thành công!', 'success');
-  cancelEditBM03(); renderBM03List();
+  cancelEditBM03(); renderBM03List(); updateDashboard();
 }
 function renderBM03List() {
   var list = getStorage(KEYS.waterTests);
@@ -2145,7 +2192,7 @@ function editBM03(id) {
 function cancelEditBM03() {
   document.getElementById('form-bm03').reset();
   document.getElementById('bm03-edit-id').value = '';
-  document.getElementById('bm03-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('bm03-date').value = todayLocalISO();
   document.getElementById('bm03-mode-badge').innerText = 'Thêm Mới';
   document.getElementById('bm03-mode-badge').className = 'font-bold text-sm text-blue-700 bg-blue-100 px-2 py-1 rounded';
   document.getElementById('bm03-btn-cancel').classList.add('hidden');
@@ -2154,7 +2201,7 @@ function deleteBM03(id) {
   showConfirm('Xóa mẫu test', 'Bạn có chắc chắn muốn xóa mẫu test này?', () => {
     var list = getStorage(KEYS.waterTests).filter(x => x.id !== id);
     setStorage(KEYS.waterTests, list);
-    showToast('Đã xóa', 'success'); renderBM03List();
+    showToast('Đã xóa', 'success'); renderBM03List(); updateDashboard();
   });
 }
 
@@ -2240,7 +2287,7 @@ function renderBM05Table() {
   if (list.length === 0) { tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-slate-400">Chưa có dữ liệu</td></tr>'; return; }
   var sorted = [].concat(list).sort(function(a, b) { var dA = String(a.date || ''), dB = String(b.date || ''); if (dA !== dB) return dB.localeCompare(dA); return getShiftOrder(b.shift) - getShiftOrder(a.shift); });
   tbody.innerHTML = sorted.map(item =>
-    '<tr><td class="px-3 py-2.5">' + escapeHtml(item.date) + '</td><td class="px-3 py-2.5 font-medium text-purple-700">' + escapeHtml(item.shift) + '</td><td class="px-3 py-2.5 text-right">' + formatNum(item.start) + '</td><td class="px-3 py-2.5 text-right text-emerald-600 font-bold">' + formatNum(item.generated) + '</td><td class="px-3 py-2.5 text-right text-amber-600 font-bold">' + formatNum(item.delivered) + '</td><td class="px-3 py-2.5 text-right font-bold text-purple-900">' + formatNum(item.end) + '</td><td class="px-3 py-2.5 text-right">' + formatNum(item.polc) + '</td><td class="px-3 py-2.5 text-right">' + item.bags + '</td><td class="px-3 py-2.5">' + escapeHtml(item.staff) + '</td><td class="px-3 py-2.5 text-center"><button onclick="editBM05(\'' + item.id + '\')" class="text-blue-600 hover:text-blue-800 mr-2"><i class="fas fa-edit"></i></button><button onclick="deleteBM05(\'' + item.id + '\')" class="text-rose-600 hover:text-rose-800"><i class="fas fa-trash"></i></button></td></tr>'
+    '<tr><td class="px-3 py-2.5">' + escapeHtml(item.date) + '</td><td class="px-3 py-2.5 font-medium text-purple-700">' + escapeHtml(item.shift) + '</td><td class="px-3 py-2.5 text-right">' + formatNum(item.start) + '</td><td class="px-3 py-2.5 text-right text-emerald-600 font-bold">' + formatNum(item.generated) + '</td><td class="px-3 py-2.5 text-right text-amber-600 font-bold">' + formatNum(item.delivered) + '</td><td class="px-3 py-2.5 text-right font-bold text-purple-900">' + formatNum(item.end) + '</td><td class="px-3 py-2.5 text-right">' + formatNum(item.polc) + '</td><td class="px-3 py-2.5 text-right">' + (item.bags || 0) + '</td><td class="px-3 py-2.5">' + escapeHtml(item.staff) + '</td><td class="px-3 py-2.5 text-center"><button onclick="editBM05(\'' + item.id + '\')" class="text-blue-600 hover:text-blue-800 mr-2"><i class="fas fa-edit"></i></button><button onclick="deleteBM05(\'' + item.id + '\')" class="text-rose-600 hover:text-rose-800"><i class="fas fa-trash"></i></button></td></tr>'
   ).join('');
 }
 function editBM05(id) {
@@ -2265,7 +2312,7 @@ function editBM05(id) {
 function cancelEditBM05() {
   document.getElementById('form-bm05').reset();
   document.getElementById('bm05-edit-id').value = '';
-  document.getElementById('bm05-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('bm05-date').value = todayLocalISO();
   document.getElementById('bm05-mode-badge').innerText = 'Thêm mới';
   document.getElementById('bm05-mode-badge').className = 'bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-1 rounded-full';
   document.getElementById('bm05-btn-cancel').classList.add('hidden');
@@ -2381,11 +2428,11 @@ function generateBM07() {
   if (iBM06.length) allNotes.push('... SỰ CỐ VẬN HÀNH: ' + iBM06.join('; '));
   document.getElementById('bm07-v-notes').innerText = allNotes.length ? allNotes.join('\n') : 'Không có ghi nhận.';
   var settings = getStorage(KEYS.settings, DEFAULT_SETTINGS);
-  var costElec = vElec * (settings.elec || DEFAULT_SETTINGS.elec);
-  var costTapWater = vTapWater * (settings.tapwater || DEFAULT_SETTINGS.tapwater);
+  var costElec = vElec * pickNum(settings.elec, DEFAULT_SETTINGS.elec);
+  var costTapWater = vTapWater * pickNum(settings.tapwater, DEFAULT_SETTINGS.tapwater);
   var costChem = 0;
-  CHEM_LIST.forEach(function(c) { costChem += (cOut[c.key] || 0) * (settings[c.key] || DEFAULT_SETTINGS[c.key]); });
-  var costSludge = slDel * (settings.sludge || DEFAULT_SETTINGS.sludge);
+  CHEM_LIST.forEach(function(c) { costChem += (cOut[c.key] || 0) * pickNum(settings[c.key], DEFAULT_SETTINGS[c.key]); });
+  var costSludge = slDel * pickNum(settings.sludge, DEFAULT_SETTINGS.sludge);
   var totalCost = costElec + costTapWater + costChem + costSludge;
   document.getElementById('bm07-cost-elec').innerText = formatNum(costElec) + ' VNĐ';
   document.getElementById('bm07-cost-tapwater').innerText = formatNum(costTapWater) + ' VNĐ';
@@ -2457,8 +2504,8 @@ function generateBM09() {
   var vOut = handovers.reduce((a, b) => a + (b.outflow || 0), 0);
   var vElec = handovers.reduce((a, b) => a + (b.elec || 0), 0);
   var vTapWater = getTapWaterUsageInRange(start, end);
-  var costElec = vElec * (settings.elec || DEFAULT_SETTINGS.elec);
-  var costTapWater = vTapWater * (settings.tapwater || DEFAULT_SETTINGS.tapwater);
+  var costElec = vElec * pickNum(settings.elec, DEFAULT_SETTINGS.elec);
+  var costTapWater = vTapWater * pickNum(settings.tapwater, DEFAULT_SETTINGS.tapwater);
   document.getElementById('bm09-v-in').innerText = formatNum(vIn);
   document.getElementById('bm09-v-out').innerText = formatNum(vOut);
   document.getElementById('bm09-v-elec').innerText = formatNum(vElec);
@@ -2495,7 +2542,8 @@ function generateBM09() {
     var invEl = document.getElementById('bm09-inv-' + c.key);
     if (invEl) { var stock = (latestChem && latestChem.items && latestChem.items[c.key]) ? latestChem.items[c.key].end : 0; invEl.innerText = formatNum(stock); }
   });
-  var costChem = (cTotals.pac * (settings.pac || DEFAULT_SETTINGS.pac)) + (cTotals.pola * (settings.pola || DEFAULT_SETTINGS.pola)) + (cTotals.polc * (settings.polc || DEFAULT_SETTINGS.polc)) + (cTotals.naoh * (settings.naoh || DEFAULT_SETTINGS.naoh)) + (cTotals.chlorine * (settings.chlorine || DEFAULT_SETTINGS.chlorine)) + (cTotals.matri * (settings.matri || DEFAULT_SETTINGS.matri));
+  var costChem = 0;
+  CHEM_LIST.forEach(function(c) { costChem += cTotals[c.key] * pickNum(settings[c.key], DEFAULT_SETTINGS[c.key]); });
   document.getElementById('bm09-v-cost-chem').innerText = formatNum(costChem) + ' VNĐ';
   document.getElementById('bm09-v-cost-combined').innerText = formatNum(costElec + costTapWater + costChem) + ' VNĐ';
   var slList = getStorage(KEYS.sludge);
@@ -2512,7 +2560,7 @@ function generateBM09() {
   document.getElementById('bm09-v-bags').innerText = formatNum(slBags);
   document.getElementById('bm09-v-polc-sludge').innerText = formatNum(slPolc);
   document.getElementById('bm09-v-slend').innerText = formatNum(sludgeEndStock) + ' kg';
-  var costSludge = slDel * (settings.sludge || DEFAULT_SETTINGS.sludge);
+  var costSludge = slDel * pickNum(settings.sludge, DEFAULT_SETTINGS.sludge);
   document.getElementById('bm09-v-cost-sludge').innerText = formatNum(costSludge) + ' VNĐ';
   document.getElementById('bm09-v-total-cost').innerText = formatNum(costElec + costTapWater + costChem + costSludge) + ' VNĐ';
   var tests = getStorage(KEYS.waterTests).filter(x => x.date >= start && x.date <= end);
@@ -2567,7 +2615,7 @@ function showWordExportModal(bmId, fileName) {
   var today = new Date(), thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(today.getDate() - 30);
   document.getElementById('word-filter-start').value = thirtyDaysAgo.toISOString().split('T')[0];
-  document.getElementById('word-filter-end').value = today.toISOString().split('T')[0];
+  document.getElementById('word-filter-end').value = todayLocalISO();
 }
 function closeWordModal() { document.getElementById('word-modal').classList.remove('active'); wordExportType = null; wordExportFileName = null; }
 function downloadWordFromModal() {
@@ -2677,7 +2725,7 @@ function showExcelExportModal(type) {
   var today = new Date(), thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(today.getDate() - 30);
   document.getElementById('excel-filter-start').value = thirtyDaysAgo.toISOString().split('T')[0];
-  document.getElementById('excel-filter-end').value = today.toISOString().split('T')[0];
+  document.getElementById('excel-filter-end').value = todayLocalISO();
   refreshExcelPreview();
 }
 function closeExcelModal() { document.getElementById('excel-modal').classList.remove('active'); }
@@ -2690,7 +2738,7 @@ function refreshExcelPreview() {
     var allData = [];
     var keys = Object.keys(KEYS).filter(k => k !== 'settings');
     keys.forEach(key => {
-      var items = getStorage(KEYS[key]);
+      var items = getStorage(KEYS[key], []);
       items.forEach(item => { allData.push(Object.assign({}, item, { _source: DATA_TYPE_LABELS[key] || key })); });
     });
     rawData = allData;
@@ -2701,7 +2749,7 @@ function refreshExcelPreview() {
   } else {
     var keyMap = { handovers: KEYS.handovers, chemicals: KEYS.chemicals, waterTests: KEYS.waterTests, maintenance: KEYS.maintenance, sludge: KEYS.sludge, operationLogs: KEYS.operationLogs };
     var key = keyMap[type];
-    if (key) { rawData = getStorage(key); if (rawData.length > 0) columns = Object.keys(rawData[0]); }
+    if (key) { rawData = getStorage(key, []); if (rawData.length > 0) columns = Object.keys(rawData[0]); }
   }
   if (s) rawData = rawData.filter(item => item.date >= s);
   if (e) rawData = rawData.filter(item => item.date <= e);
@@ -2716,7 +2764,7 @@ function renderExcelPreview(data, columns) {
   var thead = document.getElementById('excel-preview-head');
   var tbody = document.getElementById('excel-preview-body');
   var headerLabels = { '_source': 'Nguồn', 'date': 'Ngày', 'shift': 'Ca', 'handover': 'Bàn giao', 'receiver': 'Tiếp nhận', 'inflow': 'Nước vào (m³)', 'outflow': 'Nước ra (m³)', 'elec': 'Điện (kWh)', 'tapWater': 'Chỉ số nước máy VTL', 'staff': 'NV', 'location': 'Vị trí', 'ph': 'pH', 'clo': 'Clo', 'do': 'DO', 'n': 'NH4', 'f': 'Florua', 'start': 'Tồn đầu', 'generated': 'Ép', 'delivered': 'Giao', 'end': 'Tồn cuối', 'polc': 'Polymer-C', 'bags': 'Bao', 'tasks': 'Công việc', 'incidents': 'Sự cố', 'notes': 'Ghi chú' };
-  var displayColumns = columns.filter(col => !['id', '_source', 'items', 'levels', 'otherTasks', 'approvedBy', 'frequency', 'frequencyText'].includes(col));
+  var displayColumns = columns.filter(col => !['id', '_source', 'items', 'levels', 'otherTasks', 'approvedBy', 'frequency', 'frequencyText', 'dryWeight', 'startTime', 'scada', 'monitor'].includes(col));
   var priorityCols = ['date', 'shift', 'handover', 'receiver', 'inflow', 'outflow', 'elec', 'tapWater', 'staff', 'location', 'ph', 'clo', 'do', 'n', 'tasks', 'incidents', 'notes'];
   displayColumns.sort((a, b) => { var ai = priorityCols.indexOf(a), bi = priorityCols.indexOf(b); if (ai === -1 && bi === -1) return a.localeCompare(b); if (ai === -1) return 1; if (bi === -1) return -1; return ai - bi; });
   if (excelCurrentType === 'all') displayColumns.unshift('_source');
@@ -2779,9 +2827,13 @@ function exportExcelBM(type) {
     showToast('Đã xuất file Excel báo cáo!', 'success');
   } catch (error) { showToast('Lỗi khi xuất Excel: ' + error.message, 'error'); }
 }
+
 function exportBackup() {
   var backup = {};
-  Object.keys(KEYS).forEach(k => { backup[KEYS[k]] = getStorage(KEYS[k]); });
+  Object.keys(KEYS).forEach(k => {
+    var defVal = (k === 'settings') ? DEFAULT_SETTINGS : [];
+    backup[KEYS[k]] = getStorage(KEYS[k], defVal);
+  });
   backup[CUSTOM_TASKS_BM04_KEY] = getCustomTasks(CUSTOM_TASKS_BM04_KEY);
   backup[CUSTOM_TASKS_BM06_KEY] = getCustomTasks(CUSTOM_TASKS_BM06_KEY);
   backup['songmay_tqt_log_v1'] = (function(){ try { return JSON.parse(localStorage.getItem('songmay_tqt_log_v1')); } catch(e){ return null; } })();
@@ -2799,38 +2851,63 @@ function importBackup(e) {
   reader.onload = function(evt) {
     try {
       var data = JSON.parse(evt.target.result);
-      Object.keys(data).forEach(k => { 
-        localStorage.setItem(k, JSON.stringify(data[k])); 
+      var nowISO = new Date().toISOString();
+      var settingsSkipped = false;
+
+      if (data['xlnt_settings'] !== undefined) {
+        var st = data['xlnt_settings'];
+        if (Array.isArray(st) || st === null || typeof st !== 'object') {
+          settingsSkipped = true;
+          delete data['xlnt_settings'];
+        }
+      }
+      ['xlnt_handovers','xlnt_chemicals','xlnt_watertests',
+       'xlnt_maintenance','xlnt_sludge','xlnt_oplogs',
+       'xlnt_bm04_custom_tasks','xlnt_bm06_custom_tasks'].forEach(k => {
+        if (data[k] !== undefined && !Array.isArray(data[k])) delete data[k];
+      });
+
+      Object.keys(data).forEach(k => {
+        localStorage.setItem(k, JSON.stringify(data[k]));
+        localStorage.setItem(k + '_updatedAt', nowISO); // Ép thời gian mới để đẩy lên mây
         if (window.pushToFirebase) window.pushToFirebase(k, data[k]);
       });
-      showToast('Phục hồi thành công! Đang tải lại...', 'success');
+
+      if (settingsSkipped) {
+        showToast('Đã phục hồi (cài đặt không hợp lệ, giữ nguyên giá trị cũ).', 'warning');
+      } else {
+        showToast('Phục hồi thành công! Đang tải lại...', 'success');
+      }
       setTimeout(() => { location.reload(); }, 1500);
-    } catch (err) { showToast('File backup không hợp lệ!', 'error'); }
+    } catch (err) {
+      showToast('File backup không hợp lệ!', 'error');
+    }
   };
   reader.readAsText(file);
 }
+
 function loadSettings() {
   var s = getStorage(KEYS.settings, DEFAULT_SETTINGS);
-  document.getElementById('price-elec').value = s.elec || DEFAULT_SETTINGS.elec;
-  document.getElementById('price-tapwater').value = s.tapwater || DEFAULT_SETTINGS.tapwater;
-  document.getElementById('price-pac').value = s.pac || DEFAULT_SETTINGS.pac;
-  document.getElementById('price-pola').value = s.pola || DEFAULT_SETTINGS.pola;
-  document.getElementById('price-polc').value = s.polc || DEFAULT_SETTINGS.polc;
-  document.getElementById('price-naoh').value = s.naoh || DEFAULT_SETTINGS.naoh;
-  document.getElementById('price-chlorine').value = s.chlorine || DEFAULT_SETTINGS.chlorine;
-  document.getElementById('price-matri').value = s.matri || DEFAULT_SETTINGS.matri;
-  document.getElementById('price-sludge').value = s.sludge || DEFAULT_SETTINGS.sludge;
+  document.getElementById('price-elec').value = pickNum(s.elec, DEFAULT_SETTINGS.elec);
+  document.getElementById('price-tapwater').value = pickNum(s.tapwater, DEFAULT_SETTINGS.tapwater);
+  document.getElementById('price-pac').value = pickNum(s.pac, DEFAULT_SETTINGS.pac);
+  document.getElementById('price-pola').value = pickNum(s.pola, DEFAULT_SETTINGS.pola);
+  document.getElementById('price-polc').value = pickNum(s.polc, DEFAULT_SETTINGS.polc);
+  document.getElementById('price-naoh').value = pickNum(s.naoh, DEFAULT_SETTINGS.naoh);
+  document.getElementById('price-chlorine').value = pickNum(s.chlorine, DEFAULT_SETTINGS.chlorine);
+  document.getElementById('price-matri').value = pickNum(s.matri, DEFAULT_SETTINGS.matri);
+  document.getElementById('price-sludge').value = pickNum(s.sludge, DEFAULT_SETTINGS.sludge);
   var ic = s.initChem || DEFAULT_SETTINGS.initChem;
-  document.getElementById('init-pac').value = ic.pac || 0;
-  document.getElementById('init-pola').value = ic.pola || 0;
-  document.getElementById('init-polc').value = ic.polc || 0;
-  document.getElementById('init-naoh').value = ic.naoh || 0;
-  document.getElementById('init-chlorine').value = ic.chlorine || 0;
-  document.getElementById('init-matri').value = ic.matri || 0;
+  document.getElementById('init-pac').value = pickNum(ic.pac, 0);
+  document.getElementById('init-pola').value = pickNum(ic.pola, 0);
+  document.getElementById('init-polc').value = pickNum(ic.polc, 0);
+  document.getElementById('init-naoh').value = pickNum(ic.naoh, 0);
+  document.getElementById('init-chlorine').value = pickNum(ic.chlorine, 0);
+  document.getElementById('init-matri').value = pickNum(ic.matri, 0);
   var is = s.initSludge || DEFAULT_SETTINGS.initSludge;
-  document.getElementById('init-sludge-kg').value = is.kg || 0;
-  document.getElementById('init-sludge-bags').value = is.bags || 0;
-  var initTw = parseFloat(s.initTapWater) || 0;
+  document.getElementById('init-sludge-kg').value = pickNum(is.kg, 0);
+  document.getElementById('init-sludge-bags').value = pickNum(is.bags, 0);
+  var initTw = pickNum(s.initTapWater, 0);
   var elInitTw = document.getElementById('init-tapwater');
   if (elInitTw) elInitTw.value = initTw > 0 ? formatNum(initTw) : '';
   updateInitTapWaterHint();
@@ -2869,8 +2946,11 @@ function quickRange(type) {
   else if (type === 'quarter') { var q = Math.floor(now.getMonth() / 3); start = new Date(now.getFullYear(), q * 3, 1); }
   else if (type === 'year') start = new Date(now.getFullYear(), 0, 1);
   else if (type === '30days') start.setDate(now.getDate() - 29);
-  document.getElementById('filter-start').value = start.toISOString().split('T')[0];
-  document.getElementById('filter-end').value = end.toISOString().split('T')[0];
+  function localISO(d) {
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  document.getElementById('filter-start').value = localISO(start);
+  document.getElementById('filter-end').value = localISO(end);
   applyReportFilter();
 }
 function getDashboardRange() { return { startStr: document.getElementById('filter-start').value, endStr: document.getElementById('filter-end').value }; }
@@ -2887,18 +2967,18 @@ function _collectDailyStats() {
   var tapUsageMap = computeAllTapWaterUsages();
   var days = {};
   function ensureDay(d) { if (!days[d]) days[d] = { inflow:0, outflow:0, tapWater:0, elec:0, chem:{pac:0,pola:0,polc:0,naoh:0,chlorine:0,matri:0}, sludgeDel:0 }; }
-  getStorage(KEYS.handovers).filter(function(x){ return x.date >= s && x.date <= e; }).forEach(function(h){
+  getStorage(KEYS.handovers, []).filter(function(x){ return x.date >= s && x.date <= e; }).forEach(function(h){
     ensureDay(h.date);
     days[h.date].inflow  += (h.inflow  || 0);
     days[h.date].outflow += (h.outflow || 0);
     days[h.date].elec    += (h.elec    || 0);
     days[h.date].tapWater+= (tapUsageMap[h.id] || 0);
   });
-  getStorage(KEYS.chemicals).filter(function(x){ return x.date >= s && x.date <= e; }).forEach(function(c){
+  getStorage(KEYS.chemicals, []).filter(function(x){ return x.date >= s && x.date <= e; }).forEach(function(c){
     ensureDay(c.date);
     if (c.items) CHEM_LIST.forEach(function(cc){ if (c.items[cc.key]) days[c.date].chem[cc.key] += (c.items[cc.key].out || 0); });
   });
-  getStorage(KEYS.sludge).filter(function(x){ return x.date >= s && x.date <= e; }).forEach(function(sl){
+  getStorage(KEYS.sludge, []).filter(function(x){ return x.date >= s && x.date <= e; }).forEach(function(sl){
     ensureDay(sl.date);
     days[sl.date].sludgeDel += (sl.delivered || 0);
   });
@@ -2962,9 +3042,9 @@ function updateDashboard() {
   var tapUsageMap = computeAllTapWaterUsages();
   var groups = {};
   function ensureGroup(key) { if (!groups[key]) groups[key] = { inflow: 0, outflow: 0, elec: 0, tapWater: 0, chem: {pac:0, pola:0, polc:0, naoh:0, chlorine:0, matri:0}, sludgeGen: 0, sludgeDel: 0 }; }
-  getStorage(KEYS.handovers).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(h) { var k = getGroupKey(h.date, mode); ensureGroup(k); groups[k].inflow += (h.inflow || 0); groups[k].outflow += (h.outflow || 0); groups[k].elec += (h.elec || 0); groups[k].tapWater += (tapUsageMap[h.id] || 0); });
-  getStorage(KEYS.chemicals).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(c) { var k = getGroupKey(c.date, mode); ensureGroup(k); if (c.items) CHEM_LIST.forEach(function(cc) { if (c.items[cc.key]) groups[k].chem[cc.key] += (c.items[cc.key].out || 0); }); });
-  getStorage(KEYS.sludge).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(sl) { var k = getGroupKey(sl.date, mode); ensureGroup(k); groups[k].sludgeGen += (sl.generated || 0); groups[k].sludgeDel += (sl.delivered || 0); });
+  getStorage(KEYS.handovers, []).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(h) { var k = getGroupKey(h.date, mode); ensureGroup(k); groups[k].inflow += (h.inflow || 0); groups[k].outflow += (h.outflow || 0); groups[k].elec += (h.elec || 0); groups[k].tapWater += (tapUsageMap[h.id] || 0); });
+  getStorage(KEYS.chemicals, []).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(c) { var k = getGroupKey(c.date, mode); ensureGroup(k); if (c.items) CHEM_LIST.forEach(function(cc) { if (c.items[cc.key]) groups[k].chem[cc.key] += (c.items[cc.key].out || 0); }); });
+  getStorage(KEYS.sludge, []).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(sl) { var k = getGroupKey(sl.date, mode); ensureGroup(k); groups[k].sludgeGen += (sl.generated || 0); groups[k].sludgeDel += (sl.delivered || 0); });
   var keys = Object.keys(groups).sort();
   var labels = keys.map(function(k) { return formatGroupLabel(k, mode); });
   var totalIn = 0, totalOut = 0, totalElec = 0, totalSludgeDel = 0, totalSludgeGen = 0, totalTapWater = 0;
@@ -2979,17 +3059,17 @@ function updateDashboard() {
   document.getElementById('kpi-tapwater').innerText = formatNum(totalTapWater);
   document.getElementById('kpi-elec').innerText = formatNum(totalElec);
   document.getElementById('kpi-sludge-delivered').innerText = formatNum(totalSludgeDel);
-  var costElec = totalElec * (settings.elec || DEFAULT_SETTINGS.elec);
-  var costTapWater = totalTapWater * (settings.tapwater || DEFAULT_SETTINGS.tapwater);
+  var costElec = totalElec * pickNum(settings.elec, DEFAULT_SETTINGS.elec);
+  var costTapWater = totalTapWater * pickNum(settings.tapwater, DEFAULT_SETTINGS.tapwater);
   var totalChemCost = 0;
-  CHEM_LIST.forEach(function(c) { totalChemCost += totalChem[c.key] * (settings[c.key] || DEFAULT_SETTINGS[c.key]); });
-  var costSludge = totalSludgeDel * (settings.sludge || DEFAULT_SETTINGS.sludge);
+  CHEM_LIST.forEach(function(c) { totalChemCost += totalChem[c.key] * pickNum(settings[c.key], DEFAULT_SETTINGS[c.key]); });
+  var costSludge = totalSludgeDel * pickNum(settings.sludge, DEFAULT_SETTINGS.sludge);
   var totalCost = costElec + costTapWater + totalChemCost + costSludge;
   var costPerM3 = totalIn > 0 ? Math.round(totalCost / totalIn) : 0;
   document.getElementById('kpi-cost-per-m3').innerText = formatNum(costPerM3);
   CHEM_LIST.forEach(function(c) {
     var qty = totalChem[c.key];
-    var price = settings[c.key] || DEFAULT_SETTINGS[c.key];
+    var price = pickNum(settings[c.key], DEFAULT_SETTINGS[c.key]);
     var rate = totalIn > 0 ? ((qty * 1000) / totalIn).toFixed(2) : '0.00';
     var elUse = document.getElementById('chem-use-' + c.key); if (elUse) elUse.innerText = formatNum(qty);
     var elRate = document.getElementById('chem-rate-' + c.key); if (elRate) elRate.innerText = rate;
@@ -2999,15 +3079,15 @@ function updateDashboard() {
   document.getElementById('det-chem-total').innerText = formatNum(totalChemCost);
   document.getElementById('det-elec-cost').innerText = formatNum(costElec);
   document.getElementById('det-tapwater-qty').innerText = formatNum(totalTapWater) + ' m³';
-  document.getElementById('det-tapwater-price').innerText = formatNum(settings.tapwater || DEFAULT_SETTINGS.tapwater) + ' đ/m³';
+  document.getElementById('det-tapwater-price').innerText = formatNum(pickNum(settings.tapwater, DEFAULT_SETTINGS.tapwater)) + ' đ/m³';
   document.getElementById('det-tapwater-cost').innerText = formatNum(costTapWater);
   document.getElementById('det-sludge-qty').innerText = formatNum(totalSludgeDel);
   document.getElementById('det-sludge-cost').innerText = formatNum(costSludge);
   document.getElementById('det-total').innerText = formatNum(totalCost) + ' VNĐ';
-  document.getElementById('stat-shifts').innerText = getStorage(KEYS.handovers).filter(function(x) { return x.date >= s && x.date <= e; }).length;
-  document.getElementById('stat-maintenance').innerText = getStorage(KEYS.maintenance).filter(function(x) { return x.date >= s && x.date <= e; }).length;
+  document.getElementById('stat-shifts').innerText = getStorage(KEYS.handovers, []).filter(function(x) { return x.date >= s && x.date <= e; }).length;
+  document.getElementById('stat-maintenance').innerText = getStorage(KEYS.maintenance, []).filter(function(x) { return x.date >= s && x.date <= e; }).length;
   document.getElementById('stat-sludge').innerText = formatNum(totalSludgeGen);
-  var latestChem = [].concat(getStorage(KEYS.chemicals)).sort(function(a, b) { return b.date.localeCompare(a.date) || (getShiftOrder(b.shift) - getShiftOrder(a.shift)); })[0];
+  var latestChem = [].concat(getStorage(KEYS.chemicals, [])).sort(function(a, b) { return b.date.localeCompare(a.date) || (getShiftOrder(b.shift) - getShiftOrder(a.shift)); })[0];
   var totalStock = 0;
   if (latestChem && latestChem.items) CHEM_LIST.forEach(function(c) { if (latestChem.items[c.key]) totalStock += (latestChem.items[c.key].end || 0); });
   document.getElementById('stat-inventory').innerText = formatNum(totalStock) + ' kg';
@@ -3053,10 +3133,10 @@ function renderChemChart(labels, keys, groups) {
 }
 function renderCostChart(labels, keys, groups, settings) {
   var ctx = document.getElementById('chart-cost'); if (!ctx) return;
-  var elecCost = keys.map(function(k) { return groups[k].elec * (settings.elec || DEFAULT_SETTINGS.elec); });
-  var tapCost = keys.map(function(k) { return groups[k].tapWater * (settings.tapwater || DEFAULT_SETTINGS.tapwater); });
-  var chemCost = keys.map(function(k) { var total = 0; CHEM_LIST.forEach(function(c) { total += groups[k].chem[c.key] * (settings[c.key] || DEFAULT_SETTINGS[c.key]); }); return total; });
-  var sludgeCost = keys.map(function(k) { return groups[k].sludgeDel * (settings.sludge || DEFAULT_SETTINGS.sludge); });
+  var elecCost = keys.map(function(k) { return groups[k].elec * pickNum(settings.elec, DEFAULT_SETTINGS.elec); });
+  var tapCost = keys.map(function(k) { return groups[k].tapWater * pickNum(settings.tapwater, DEFAULT_SETTINGS.tapwater); });
+  var chemCost = keys.map(function(k) { var total = 0; CHEM_LIST.forEach(function(c) { total += groups[k].chem[c.key] * pickNum(settings[c.key], DEFAULT_SETTINGS[c.key]); }); return total; });
+  var sludgeCost = keys.map(function(k) { return groups[k].sludgeDel * pickNum(settings.sludge, DEFAULT_SETTINGS.sludge); });
   if (chartCost) chartCost.destroy();
   chartCost = new Chart(ctx, { type: 'bar', data: { labels: labels, datasets: [ { label: 'Điện', data: elecCost, backgroundColor: '#f59e0b', stack: 'cost', borderRadius: 4 }, { label: 'Nước máy VTL', data: tapCost, backgroundColor: '#06b6d4', stack: 'cost', borderRadius: 4 }, { label: 'Hóa chất', data: chemCost, backgroundColor: '#3b82f6', stack: 'cost', borderRadius: 4 }, { label: 'Bùn', data: sludgeCost, backgroundColor: '#8b5cf6', stack: 'cost', borderRadius: 4 } ] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, title: { display: true, text: 'VNĐ' } } } } });
 }
@@ -3068,27 +3148,27 @@ function buildCostDetailHtml() {
   var tapUsageMap = computeAllTapWaterUsages();
   var totalIn = 0, totalElec = 0, totalSludgeDel = 0, totalTapWater = 0;
   var totalChem = {pac:0, pola:0, polc:0, naoh:0, chlorine:0, matri:0};
-  getStorage(KEYS.handovers).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(h) { totalIn += (h.inflow || 0); totalElec += (h.elec || 0); totalTapWater += (tapUsageMap[h.id] || 0); });
-  getStorage(KEYS.chemicals).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(c) { if (c.items) CHEM_LIST.forEach(function(cc) { if (c.items[cc.key]) totalChem[cc.key] += (c.items[cc.key].out || 0); }); });
-  getStorage(KEYS.sludge).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(sl) { totalSludgeDel += (sl.delivered || 0); });
-  var costElec = totalElec * (settings.elec || DEFAULT_SETTINGS.elec);
-  var costTapWater = totalTapWater * (settings.tapwater || DEFAULT_SETTINGS.tapwater);
+  getStorage(KEYS.handovers, []).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(h) { totalIn += (h.inflow || 0); totalElec += (h.elec || 0); totalTapWater += (tapUsageMap[h.id] || 0); });
+  getStorage(KEYS.chemicals, []).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(c) { if (c.items) CHEM_LIST.forEach(function(cc) { if (c.items[cc.key]) totalChem[cc.key] += (c.items[cc.key].out || 0); }); });
+  getStorage(KEYS.sludge, []).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(sl) { totalSludgeDel += (sl.delivered || 0); });
+  var costElec = totalElec * pickNum(settings.elec, DEFAULT_SETTINGS.elec);
+  var costTapWater = totalTapWater * pickNum(settings.tapwater, DEFAULT_SETTINGS.tapwater);
   var totalChemCost = 0;
-  CHEM_LIST.forEach(function(c) { totalChemCost += totalChem[c.key] * (settings[c.key] || DEFAULT_SETTINGS[c.key]); });
-  var costSludge = totalSludgeDel * (settings.sludge || DEFAULT_SETTINGS.sludge);
+  CHEM_LIST.forEach(function(c) { totalChemCost += totalChem[c.key] * pickNum(settings[c.key], DEFAULT_SETTINGS[c.key]); });
+  var costSludge = totalSludgeDel * pickNum(settings.sludge, DEFAULT_SETTINGS.sludge);
   var totalCost = costElec + costTapWater + totalChemCost + costSludge;
   var html = '<table style="border-collapse:collapse;width:100%;margin-top:10px;font-size:10pt">';
   html += '<thead><tr><th style="border:1px solid #000;padding:4px 8px;background:#f0f0f0">Hạng mục</th><th style="border:1px solid #000;padding:4px 8px;background:#f0f0f0">Lượng</th><th style="border:1px solid #000;padding:4px 8px;background:#f0f0f0">Định mức (g/m³)</th><th style="border:1px solid #000;padding:4px 8px;background:#f0f0f0">Đơn giá (VNĐ)</th><th style="border:1px solid #000;padding:4px 8px;background:#f0f0f0">Thành tiền (VNĐ)</th></tr></thead><tbody>';
   CHEM_LIST.forEach(function(c) {
     var qty = totalChem[c.key];
-    var price = settings[c.key] || DEFAULT_SETTINGS[c.key];
+    var price = pickNum(settings[c.key], DEFAULT_SETTINGS[c.key]);
     var rate = totalIn > 0 ? ((qty * 1000) / totalIn).toFixed(2) : '0.00';
     html += '<tr><td style="border:1px solid #000;padding:4px 8px">' + c.name + '</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(qty) + ' kg</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + rate + '</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(price) + '</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(qty * price) + '</td></tr>';
   });
   html += '<tr style="font-weight:bold;background:#f0f0f0"><td colspan="4" style="border:1px solid #000;padding:4px 8px">TỔNG HÓA CHẤT</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(totalChemCost) + '</td></tr>';
-  html += '<tr><td style="border:1px solid #000;padding:4px 8px">ĐIỆN NĂNG</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(totalElec) + ' kWh</td><td style="border:1px solid #000;padding:4px 8px;text-align:center">-</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(settings.elec || DEFAULT_SETTINGS.elec) + '</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(costElec) + '</td></tr>';
-  html += '<tr style="background:#ecfeff"><td style="border:1px solid #000;padding:4px 8px"><b>NƯỚC MÁY VTL</b></td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(totalTapWater) + ' m³</td><td style="border:1px solid #000;padding:4px 8px;text-align:center">-</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(settings.tapwater || DEFAULT_SETTINGS.tapwater) + '</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(costTapWater) + '</td></tr>';
-  html += '<tr><td style="border:1px solid #000;padding:4px 8px">BÙN GIAO</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(totalSludgeDel) + ' kg</td><td style="border:1px solid #000;padding:4px 8px;text-align:center">-</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(settings.sludge || DEFAULT_SETTINGS.sludge) + '</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(costSludge) + '</td></tr>';
+  html += '<tr><td style="border:1px solid #000;padding:4px 8px">ĐIỆN NĂNG</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(totalElec) + ' kWh</td><td style="border:1px solid #000;padding:4px 8px;text-align:center">-</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(pickNum(settings.elec, DEFAULT_SETTINGS.elec)) + '</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(costElec) + '</td></tr>';
+  html += '<tr style="background:#ecfeff"><td style="border:1px solid #000;padding:4px 8px"><b>NƯỚC MÁY VTL</b></td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(totalTapWater) + ' m³</td><td style="border:1px solid #000;padding:4px 8px;text-align:center">-</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(pickNum(settings.tapwater, DEFAULT_SETTINGS.tapwater)) + '</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(costTapWater) + '</td></tr>';
+  html += '<tr><td style="border:1px solid #000;padding:4px 8px">BÙN GIAO</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(totalSludgeDel) + ' kg</td><td style="border:1px solid #000;padding:4px 8px;text-align:center">-</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(pickNum(settings.sludge, DEFAULT_SETTINGS.sludge)) + '</td><td style="border:1px solid #000;padding:4px 8px;text-align:right">' + formatNum(costSludge) + '</td></tr>';
   html += '<tr style="font-weight:bold;background:#dbeafe"><td colspan="4" style="border:1px solid #000;padding:4px 8px">TỔNG CHI PHÍ VẬN HÀNH</td><td style="border:1px solid #000;padding:4px 8px;text-align:right;color:#b91c1c">' + formatNum(totalCost) + ' VNĐ</td></tr>';
   html += '</tbody></table>';
   html += '<p style="font-style:italic;color:#b45309;font-size:9pt;margin-top:8px;padding:6px 8px;background:#fffbeb;border:1px dashed #f59e0b">⚠ ' + COST_WARNING_TEXT + '</p>';
@@ -3134,17 +3214,17 @@ function exportDashboardWord() {
   var tapUsageMap = computeAllTapWaterUsages();
   var groups = {};
   function ensureGroup(key) { if (!groups[key]) groups[key] = { inflow: 0, outflow: 0, elec: 0, tapWater: 0, chem: {pac:0,pola:0,polc:0,naoh:0,chlorine:0,matri:0}, sludgeDel: 0 }; }
-  getStorage(KEYS.handovers).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(h) { var k = getGroupKey(h.date, mode); ensureGroup(k); groups[k].inflow += (h.inflow||0); groups[k].outflow += (h.outflow||0); groups[k].elec += (h.elec||0); groups[k].tapWater += (tapUsageMap[h.id]||0); });
-  getStorage(KEYS.chemicals).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(c) { var k = getGroupKey(c.date, mode); ensureGroup(k); if (c.items) CHEM_LIST.forEach(function(cc) { if (c.items[cc.key]) groups[k].chem[cc.key] += (c.items[cc.key].out||0); }); });
-  getStorage(KEYS.sludge).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(sl) { var k = getGroupKey(sl.date, mode); ensureGroup(k); groups[k].sludgeDel += (sl.delivered||0); });
+  getStorage(KEYS.handovers, []).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(h) { var k = getGroupKey(h.date, mode); ensureGroup(k); groups[k].inflow += (h.inflow||0); groups[k].outflow += (h.outflow||0); groups[k].elec += (h.elec||0); groups[k].tapWater += (tapUsageMap[h.id]||0); });
+  getStorage(KEYS.chemicals, []).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(c) { var k = getGroupKey(c.date, mode); ensureGroup(k); if (c.items) CHEM_LIST.forEach(function(cc) { if (c.items[cc.key]) groups[k].chem[cc.key] += (c.items[cc.key].out||0); }); });
+  getStorage(KEYS.sludge, []).filter(function(x) { return x.date >= s && x.date <= e; }).forEach(function(sl) { var k = getGroupKey(sl.date, mode); ensureGroup(k); groups[k].sludgeDel += (sl.delivered||0); });
   var totalIn = 0, totalOut = 0, totalElec = 0, totalSludgeDel = 0, totalTapWater = 0;
   var totalChem = {pac:0,pola:0,polc:0,naoh:0,chlorine:0,matri:0};
   Object.keys(groups).forEach(function(k) { totalIn += groups[k].inflow; totalOut += groups[k].outflow; totalElec += groups[k].elec; totalTapWater += groups[k].tapWater; totalSludgeDel += groups[k].sludgeDel; CHEM_LIST.forEach(function(c) { totalChem[c.key] += groups[k].chem[c.key]; }); });
-  var costElec = totalElec * (settings.elec || DEFAULT_SETTINGS.elec);
-  var costTapWater = totalTapWater * (settings.tapwater || DEFAULT_SETTINGS.tapwater);
+  var costElec = totalElec * pickNum(settings.elec, DEFAULT_SETTINGS.elec);
+  var costTapWater = totalTapWater * pickNum(settings.tapwater, DEFAULT_SETTINGS.tapwater);
   var totalChemCost = 0;
-  CHEM_LIST.forEach(function(c) { totalChemCost += totalChem[c.key] * (settings[c.key] || DEFAULT_SETTINGS[c.key]); });
-  var costSludge = totalSludgeDel * (settings.sludge || DEFAULT_SETTINGS.sludge);
+  CHEM_LIST.forEach(function(c) { totalChemCost += totalChem[c.key] * pickNum(settings[c.key], DEFAULT_SETTINGS[c.key]); });
+  var costSludge = totalSludgeDel * pickNum(settings.sludge, DEFAULT_SETTINGS.sludge);
   var totalCost = costElec + costTapWater + totalChemCost + costSludge;
   var costPerM3 = totalIn > 0 ? Math.round(totalCost / totalIn) : 0;
   var imgWater = chartWater ? chartWater.toBase64Image() : '';
@@ -3206,7 +3286,7 @@ function refreshTabData(target) {
   else if (target === 'settings') loadSettings();
 }
 
-// Hàm tự động vẽ lại giao diện khi có dữ liệu mới từ máy khác gửi tới
+// HÀM CẬP NHẬT UI AN TOÀN KHI CÓ DỮ LIỆU TỪ MÁY KHÁC (Không đè form đang nhập)
 let syncTimeout;
 window.refreshAllUI = function() {
   clearTimeout(syncTimeout);
@@ -3214,25 +3294,20 @@ window.refreshAllUI = function() {
     try {
       var activeMenu = document.querySelector('.menu-item.active');
       var target = activeMenu ? activeMenu.getAttribute('data-target') : 'dashboard';
-      
+
       if (target === 'dashboard') {
         updateDashboard();
       } else if (target === 'bm01') {
         renderBM01Table();
         updateBM01TapWaterHint();
       } else if (target === 'bm02') {
-        renderBM02Form();
-        renderBM02Table();
-        onBM02DateChange();
+        renderBM02Table(); // KHÔNG renderBM02Form
       } else if (target === 'bm03') {
         renderBM03List();
       } else if (target === 'bm04') {
-        renderBM04Table();
-        generateBM04Tasks();
+        renderBM04Table(); // KHÔNG generateBM04Tasks
       } else if (target === 'bm05') {
-        recalculateSludgeChain();
-        renderBM05Table();
-        onBM05DateChange();
+        renderBM05Table(); // KHÔNG recalculateSludgeChain
       } else if (target === 'bm06') {
         renderBM06Table();
       } else if (target === 'bm07') {
@@ -3242,28 +3317,29 @@ window.refreshAllUI = function() {
       } else if (target === 'bm09') {
         generateBM09();
       } else if (target === 'tqt') {
-        if (window.tqtRefresh) window.tqtRefresh();
-      } else if (target === 'settings') {
-        loadSettings();
+        if (window.tqtRefresh && (!window.tqtHasPendingChanges || !window.tqtHasPendingChanges())) {
+          window.tqtRefresh();
+        }
       }
-      
-      // Luôn cập nhật Dashboard ngầm để số liệu tổng hợp mới nhất
+
       if (target !== 'dashboard') {
         updateDashboard();
       }
     } catch(e) {
       console.log("Đang chờ giao diện tải xong...", e);
     }
-  }, 300); // 300ms debounce
+  }, 300);
 };
 
 document.addEventListener('DOMContentLoaded', function() {
-  var today = new Date().toISOString().split('T')[0];
   document.getElementById('current-date').innerText = new Date().toLocaleDateString('vi-VN');
+  var today = todayLocalISO();
+
   ['bm01-date','bm02-date','bm03-date','bm04-date','bm05-date','bm06-date','bm07-date-input'].forEach(id => { var el = document.getElementById(id); if (el) el.value = today; });
-  var nowMonth = new Date().toISOString().substring(0, 7);
+
+  var nowMonth = today.substring(0, 7);
   if (document.getElementById('bm08-month-input')) document.getElementById('bm08-month-input').value = nowMonth;
-  var firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+  var firstDay = today.substring(0, 7) + '-01';
   if (document.getElementById('bm09-start-date')) document.getElementById('bm09-start-date').value = firstDay;
   if (document.getElementById('bm09-end-date')) document.getElementById('bm09-end-date').value = today;
   if (document.getElementById('filter-start')) document.getElementById('filter-start').value = firstDay;
@@ -3300,7 +3376,6 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('word-modal').addEventListener('mousedown', function(e) { if (e.target === this) closeWordModal(); });
   document.addEventListener('keydown', function(e) { if (e.key === 'Escape') { closeExcelModal(); closeWordModal(); } });
 
-  // Print handler cho TQT (landscape A4)
   window.addEventListener('beforeprint', function() {
     var tqt = document.getElementById('tqt');
     var style = document.getElementById('print-page-style');
@@ -3327,21 +3402,9 @@ document.addEventListener('DOMContentLoaded', function() {
   var TQT_STORAGE_KEY = 'songmay_tqt_log_v1';
 
   var TQT_COLUMNS = [
-    ['vs',       'Vệ sinh'],
-    ['cod',      'COD'],
-    ['ph',       'pH'],
-    ['tss',      'TSS'],
-    ['nh4',      'NH4'],
-    ['no3',      'NO3'],
-    ['tn',       'TN'],
-    ['temp',     'Temp'],
-    ['flout',    'Fl out'],
-    ['flin',     'FL in'],
-    ['bom',      'Bơm'],
-    ['internet', 'Internet'],
-    ['dien',     'Điện'],
-    ['ong',      'Đường ống'],
-    ['ups',      'Bộ lưu điện']
+    ['vs',       'Vệ sinh'], ['cod', 'COD'], ['ph', 'pH'], ['tss', 'TSS'], ['nh4', 'NH4'],
+    ['no3', 'NO3'], ['tn', 'TN'], ['temp', 'Temp'], ['flout', 'Fl out'], ['flin', 'FL in'],
+    ['bom', 'Bơm'], ['internet', 'Internet'], ['dien', 'Điện'], ['ong', 'Đường ống'], ['ups', 'Bộ lưu điện']
   ];
 
   var TQT_CYCLE = ['', 'X', 'O', '0'];
@@ -3398,6 +3461,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   var tqtEditOpsDay = null;
   var tqtEditMaintIdx = null;
+  var tqtSaveTimer = null;
 
   function tqtEscapeHtml(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
@@ -3421,20 +3485,23 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!tqtStore.maint.length) tqtStore.maint = TQT_SEED_MAINT.map(function(r) { return Object.assign({}, r); });
   }
 
-  var tqtSaveTimer = null;
   function tqtScheduleSave() {
     clearTimeout(tqtSaveTimer);
     tqtSaveTimer = setTimeout(function() {
-      try { 
-        localStorage.setItem(TQT_STORAGE_KEY, JSON.stringify(tqtStore)); 
+      tqtSaveTimer = null;
+      try {
+        localStorage.setItem(TQT_STORAGE_KEY, JSON.stringify(tqtStore));
+        localStorage.setItem(TQT_STORAGE_KEY + '_updatedAt', new Date().toISOString());
         if (window.pushToFirebase) {
           window.pushToFirebase(TQT_STORAGE_KEY, tqtStore);
         }
-        tqtFlashStatus(); 
+        tqtFlashStatus();
       }
       catch(e) { console.warn('TQT: Không lưu được:', e); }
     }, 300);
   }
+  window.tqtHasPendingChanges = function() { return tqtSaveTimer !== null; };
+
   function tqtFlashStatus() {
     ['tqt-saveStatus','tqt-saveStatus2'].forEach(function(id) {
       var el = document.getElementById(id);
@@ -3522,7 +3589,6 @@ document.addEventListener('DOMContentLoaded', function() {
     tbody.innerHTML = html;
   }
 
-  // ============ OPS TABLE EVENTS ============
   document.getElementById('tqt-opsBody').addEventListener('click', function(e) {
     var fillBtn = e.target.closest('[data-fillrow]');
     if (fillBtn) {
@@ -3581,7 +3647,6 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('tqt-btnPrintOps').addEventListener('click', function() { window.print(); });
   document.getElementById('tqt-btnExportOps').addEventListener('click', tqtExportOpsExcel);
 
-  // ============ MAINT TABLE EVENTS ============
   document.getElementById('tqt-maintBody').addEventListener('input', function(e) {
     var el = e.target;
     if (el.getAttribute('data-i') === null) return;
@@ -3600,7 +3665,10 @@ document.addEventListener('DOMContentLoaded', function() {
     tqtRenderMaint(); tqtScheduleSave();
   });
   document.getElementById('tqt-btnAddMaint').addEventListener('click', function() {
-    var today = new Date().toISOString().slice(0, 10);
+    var today = (function() {
+      var d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    })();
     tqtStore.maint.push({ date: today, work: '', staff: '', note: '' });
     tqtRenderMaint(); tqtScheduleSave();
     var rows = document.querySelectorAll('#tqt-maintBody tr');
@@ -3610,7 +3678,6 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('tqt-btnPrintMaint').addEventListener('click', function() { window.print(); });
   document.getElementById('tqt-btnExportMaint').addEventListener('click', tqtExportMaintExcel);
 
-  // ============ OPS EDIT MODAL ============
   function tqtOpenOpsModal(day) {
     tqtEditOpsDay = day;
     var rec = tqtGetDay(tqtCurMonth, day);
@@ -3644,7 +3711,6 @@ document.addEventListener('DOMContentLoaded', function() {
     tqtScheduleSave(); tqtRenderOps(); tqtCloseOpsModal();
   }
 
-  // ============ MAINT EDIT MODAL ============
   function tqtOpenMaintModal(idx) {
     if (idx < 0 || idx >= tqtStore.maint.length) return;
     tqtEditMaintIdx = idx;
@@ -3666,7 +3732,6 @@ document.addEventListener('DOMContentLoaded', function() {
     tqtScheduleSave(); tqtRenderMaint(); tqtCloseMaintModal();
   }
 
-  // expose modal functions
   window.tqtOpenOpsModal = tqtOpenOpsModal;
   window.tqtCloseOpsModal = tqtCloseOpsModal;
   window.tqtSaveOpsModal = tqtSaveOpsModal;
@@ -3674,7 +3739,6 @@ document.addEventListener('DOMContentLoaded', function() {
   window.tqtCloseMaintModal = tqtCloseMaintModal;
   window.tqtSaveMaintModal = tqtSaveMaintModal;
 
-  // ============ EXPORT EXCEL ============
   function tqtDownloadExcel(filename, tableHTML) {
     var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">' +
       '<head><meta charset="utf-8"><style>' +
@@ -3736,7 +3800,6 @@ document.addEventListener('DOMContentLoaded', function() {
     tqtDownloadExcel('Nhat_ky_bao_tri_TQT_SongMay.xls', rows);
   }
 
-  // ============ TABS (nội bộ TQT) ============
   document.querySelectorAll('#tqt .tabs .tab').forEach(function(btn) {
     btn.addEventListener('click', function() {
       document.querySelectorAll('#tqt .tabs .tab').forEach(function(b) { b.classList.remove('active'); });
@@ -3747,7 +3810,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  // ============ PUBLIC REFRESH ============
   window.tqtRefresh = function() {
     tqtLoad();
     var mp = document.getElementById('tqt-monthPicker');
@@ -3756,7 +3818,6 @@ document.addEventListener('DOMContentLoaded', function() {
     tqtRenderMaint();
   };
 
-  // ============ INIT ============
   function tqtInit() {
     if (document.getElementById('tqt-opsBody') && document.getElementById('tqt-opsBody').children.length === 0) {
       tqtLoad();
