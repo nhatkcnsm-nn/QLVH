@@ -271,7 +271,7 @@ input[type="number"]{-moz-appearance:textfield}
     </ul>
   </nav>
   <div class="p-4 text-xs text-center text-slate-400 border-t border-slate-100 flex items-center justify-between">
-    <span id="sync-text"><i class="fas fa-cloud text-emerald-500 mr-1"></i> Cloud Sync</span>
+    <span id="sync-text"><i class="fas fa-database text-emerald-500 mr-1"></i> LocalStorage</span>
     <span class="bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded text-[10px]">Hoạt động</span>
   </div>
 </aside>
@@ -948,7 +948,7 @@ input[type="number"]{-moz-appearance:textfield}
   </div>
 </section>
 
-<!-- ============ TQT ============ -->
+<!-- ============ TQT — SỔ VẬN HÀNH TRẠM QUAN TRẮC ============ -->
 <section id="tqt" class="tab-content">
   <div class="app-header no-print">
     <div class="logo">🌊</div>
@@ -963,6 +963,7 @@ input[type="number"]{-moz-appearance:textfield}
     <button class="tab" data-tqt-tab="maint" type="button">🛠️ Nhật ký bảo trì</button>
   </nav>
 
+  <!-- TAB OPS -->
   <div id="tqt-tab-ops">
     <div class="print-header">
       SỔ VẬN HÀNH TRẠM QUAN TRẮC NƯỚC THẢI – KHU CÔNG NGHIỆP SÔNG MÂY<br>
@@ -1022,6 +1023,7 @@ input[type="number"]{-moz-appearance:textfield}
     </div>
   </div>
 
+  <!-- TAB MAINT -->
   <div id="tqt-tab-maint" hidden>
     <div class="print-header">
       NHẬT KÝ BẢO TRÌ, KIỂM CHUẨN THIẾT BỊ TRẠM QUAN TRẮC TỰ ĐỘNG<br>
@@ -1191,7 +1193,7 @@ input[type="number"]{-moz-appearance:textfield}
   </div>
 </div>
 
-<!-- TQT Modal: Chỉnh sửa dòng Sổ vận hành -->
+<!-- ====== TQT MODAL: Chỉnh sửa dòng Sổ vận hành ====== -->
 <div id="tqt-ops-modal" class="modal-excel">
   <div class="modal-excel-content" style="max-width:760px">
     <div class="modal-excel-header">
@@ -1217,7 +1219,7 @@ input[type="number"]{-moz-appearance:textfield}
   </div>
 </div>
 
-<!-- TQT Modal: Chỉnh sửa dòng Nhật ký bảo trì -->
+<!-- ====== TQT MODAL: Chỉnh sửa dòng Nhật ký bảo trì ====== -->
 <div id="tqt-maint-modal" class="modal-excel">
   <div class="modal-excel-content" style="max-width:720px">
     <div class="modal-excel-header">
@@ -1250,135 +1252,12 @@ input[type="number"]{-moz-appearance:textfield}
   </div>
 </div>
 
-<!-- ============================================ -->
-<!-- FIREBASE MODULE (FIXED)                      -->
-<!-- ============================================ -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyDq13o2UoTVFY58ARpQFN_EzadGe8dUkTw",
-    authDomain: "nmxlntsm.firebaseapp.com",
-    databaseURL: "https://nmxlntsm-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "nmxlntsm",
-    storageBucket: "nmxlntsm.firebasestorage.app",
-    messagingSenderId: "683501593781",
-    appId: "1:683501593781:web:4feeb5b3d56fa5f51ccafc",
-    measurementId: "G-YD9VYWCKDF"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-
-  const SYNC_KEYS = [
-    'xlnt_settings', 'xlnt_handovers', 'xlnt_chemicals', 'xlnt_watertests',
-    'xlnt_maintenance', 'xlnt_sludge', 'xlnt_oplogs',
-    'xlnt_bm04_custom_tasks', 'xlnt_bm06_custom_tasks', 'songmay_tqt_log_v1'
-  ];
-  const syncDoneSet = new Set();
-  let syncTimedOut = false;
-
-  function setSyncStatus(html, type) {
-    var el = document.getElementById('sync-text');
-    if (!el) return;
-    el.innerHTML = html;
-  }
-
-  // Đẩy dữ liệu lên Firebase với timestamp chính xác
-  window.pushToFirebase = async function(key, val) {
-    try {
-      var updatedAt = localStorage.getItem(key + '_updatedAt') || new Date().toISOString();
-      await setDoc(doc(db, "songmay_data", key), {
-        data: val,
-        updatedAt: updatedAt
-      });
-      // Cập nhật UI thành công (chỉ nếu không phải timeout)
-      if (syncDoneSet.size >= SYNC_KEYS.length && !syncTimedOut) {
-        setSyncStatus('<i class="fas fa-cloud text-emerald-500 mr-1"></i> Đã đồng bộ');
-      }
-      console.log("☁️ Pushed:", key, "@", updatedAt);
-    } catch (e) {
-      console.error("❌ Push error:", key, e);
-      setSyncStatus('<i class="fas fa-exclamation-triangle text-rose-500 mr-1"></i> Lỗi đồng bộ');
-    }
-  };
-
-  // Lắng nghe thay đổi — CHỈ cập nhật nếu cloud MỚI HƠN local
-  window.initFirebaseSync = function() {
-    setSyncStatus('<i class="fas fa-spinner fa-spin text-blue-500 mr-1"></i> Đang tải...');
-
-    // Timeout fallback: nếu quá 10s không nhận đủ snapshot
-    setTimeout(function() {
-      if (syncDoneSet.size < SYNC_KEYS.length) {
-        syncTimedOut = true;
-        setSyncStatus('<i class="fas fa-plug text-amber-500 mr-1"></i> Ngoại tuyến');
-      }
-    }, 10000);
-
-    SYNC_KEYS.forEach(key => {
-      const docRef = doc(db, "songmay_data", key);
-      onSnapshot(docRef, (docSnap) => {
-        syncDoneSet.add(key);
-        if (syncDoneSet.size >= SYNC_KEYS.length && !syncTimedOut) {
-          setSyncStatus('<i class="fas fa-cloud text-emerald-500 mr-1"></i> Đã đồng bộ');
-        }
-
-        if (!docSnap.exists()) return;
-
-        try {
-          const cloudData = docSnap.data().data;
-          const cloudUpdatedAt = docSnap.data().updatedAt || '';
-          const localUpdatedAt = localStorage.getItem(key + '_updatedAt') || '';
-
-          // Logic: 
-          // - Nếu local chưa có _updatedAt (lần đầu sync) → cloud thắng (không ghi đè local đã có timestamp)
-          // - Nếu cloud MỚI HƠN local → cloud thắng
-          // - Nếu cloud CŨ HƠN hoặc bằng → bỏ qua, giữ local
-          const shouldApply = !localUpdatedAt || (cloudUpdatedAt && cloudUpdatedAt > localUpdatedAt);
-
-          if (shouldApply && cloudData !== undefined && cloudData !== null) {
-            const newStr = JSON.stringify(cloudData);
-            if (localStorage.getItem(key) !== newStr) {
-              localStorage.setItem(key, newStr);
-              if (cloudUpdatedAt) {
-                localStorage.setItem(key + '_updatedAt', cloudUpdatedAt);
-              }
-              console.log("⬇️ Applied from cloud:", key, "@", cloudUpdatedAt);
-              if (typeof window.refreshAllUI === 'function') {
-                window.refreshAllUI();
-              }
-            }
-          }
-        } catch(e) {
-          console.warn("Snapshot handler error:", key, e);
-        }
-      }, (error) => {
-        console.error("❌ Firestore onSnapshot error:", key, error);
-        syncDoneSet.add(key);
-        if (!syncTimedOut) {
-          setSyncStatus('<i class="fas fa-exclamation-triangle text-rose-500 mr-1"></i> Lỗi kết nối');
-        }
-      });
-    });
-  };
-
-  // Kích hoạt sau khi DOM sẵn sàng
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() {
-      setTimeout(function() { window.initFirebaseSync(); }, 50);
-    });
-  } else {
-    setTimeout(function() { window.initFirebaseSync(); }, 50);
-  }
-</script>
-
-<!-- ============================================ -->
-<!-- MAIN APP SCRIPT (FIXED)                      -->
-<!-- ============================================ -->
+<!-- ===================================================== -->
+<!-- MAIN APP SCRIPT (FIXED)                               -->
+<!-- ===================================================== -->
 <script>
 // ============================================================
-// HỆ THỐNG XỬ LÝ SỰ KIỆN VÀ DỮ LIỆU (QLVH) — v2 FIXED
+// HỆ THỐNG XỬ LÝ SỰ KIỆN VÀ DỮ LIỆU (QLVH) — v3 FIXED
 // ============================================================
 const KEYS = {
   settings: 'xlnt_settings', handovers: 'xlnt_handovers', chemicals: 'xlnt_chemicals',
@@ -1388,13 +1267,16 @@ const CHEM_LIST = [
   { key: 'pac', name: 'PAC' }, { key: 'pola', name: 'Polymer-A' }, { key: 'polc', name: 'Polymer-C' },
   { key: 'naoh', name: 'NaOH' }, { key: 'chlorine', name: 'Chlorine' }, { key: 'matri', name: 'Mật rỉ' }
 ];
+
+// ⚠️ ĐÃ CẬP NHẬT THEO SỐ ĐIỆN THOẠI/ẢNH CỦA BẠN
 const DEFAULT_SETTINGS = {
-  elec: 2000, tapwater: 15000,
-  pac: 15000, pola: 85000, polc: 95000, naoh: 18000, chlorine: 35000, matri: 8000, sludge: 500,
+  elec: 2280, tapwater: 12075,
+  pac: 7700, pola: 33500, polc: 48000, naoh: 16500, chlorine: 33500, matri: 6800, sludge: 2916,
   initChem: { pac: 0, pola: 0, polc: 0, naoh: 0, chlorine: 0, matri: 0 },
   initSludge: { kg: 0, bags: 0 },
   initTapWater: 0
 };
+
 const DATA_TYPE_LABELS = {
   all: 'Tất cả dữ liệu', handovers: 'BM-01: Giao ca', chemicals: 'BM-02: Hóa chất',
   waterTests: 'BM-03: Test nhanh', maintenance: 'BM-04: Bảo trì', sludge: 'BM-05: Ép bùn', operationLogs: 'BM-06: Nhật ký vận hành'
@@ -1412,13 +1294,11 @@ let wordExportType = null;
 let wordExportFileName = null;
 let bm02StockUnlocked = false;
 
-// ✅ FIX: helper lấy số, chỉ fallback khi null/undefined/NaN (KHÔNG fallback khi = 0)
 function pickNum(val, fallback) {
   if (val === undefined || val === null || val === '') return fallback;
   var n = Number(val);
   return isNaN(n) ? fallback : n;
 }
-// ✅ FIX: ngày địa phương (tránh lỗi UTC ±1 ngày trước 7h sáng VN)
 function todayLocalISO() {
   var d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
@@ -1448,19 +1328,16 @@ const COST_WARNING_TEXT = 'Đây là chi phí gần đúng nhằm mục đích t
 
 function generateId() { return Date.now().toString(36) + Math.random().toString(36).substring(2, 7); }
 
-// ✅ FIX 1+2: getStorage kiểm tra 2 chiều (mảng/object), không tự ý trả default cho object
+// ✅ getStorage/setStorage không còn dính dáng đến Firebase
 function getStorage(key, defaultVal) {
   if (defaultVal === undefined) defaultVal = [];
   try {
     const data = localStorage.getItem(key);
     if (!data) return defaultVal;
     const parsed = JSON.parse(data);
-
-    // Nếu default là MẢNG → dữ liệu phải là MẢNG
     if (Array.isArray(defaultVal)) {
       return Array.isArray(parsed) ? parsed : defaultVal;
     }
-    // Nếu default là OBJECT (không null) → dữ liệu phải là OBJECT (không phải array/null)
     if (defaultVal !== null && typeof defaultVal === 'object') {
       if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
         return defaultVal;
@@ -1471,13 +1348,9 @@ function getStorage(key, defaultVal) {
   } catch (e) { return defaultVal; }
 }
 
-// ✅ FIX 3: setStorage lưu _updatedAt và push lên Firebase
 function setStorage(key, val) {
   localStorage.setItem(key, JSON.stringify(val));
-  localStorage.setItem(key + '_updatedAt', new Date().toISOString());
-  if (window.pushToFirebase) {
-    window.pushToFirebase(key, val);
-  }
+  // Đã xóa bỏ phần push lên Firebase để tránh việc tự động ghi đè dữ liệu
 }
 
 function formatNum(num) { if (num === null || num === undefined || isNaN(num)) return '0'; return Number(num).toLocaleString('vi-VN'); }
@@ -1538,10 +1411,6 @@ function toggleSidebar() {
 function getCustomTasks(key) { try { return JSON.parse(localStorage.getItem(key)) || []; } catch (e) { return []; } }
 function setCustomTasks(key, tasks) {
   localStorage.setItem(key, JSON.stringify(tasks));
-  localStorage.setItem(key + '_updatedAt', new Date().toISOString());
-  if (window.pushToFirebase) {
-    window.pushToFirebase(key, tasks);
-  }
 }
 
 function isTapWaterCalcRecord(rec) {
@@ -1651,7 +1520,6 @@ function updateBM02StockLockState() {
   }
 }
 
-// ✅ FIX 10: recalculate chỉ push khi data thực sự thay đổi
 function recalculateChemChain() {
   var list = getStorage(KEYS.chemicals);
   if (list.length === 0) return;
@@ -2457,7 +2325,6 @@ function generateBM07() {
   if (iBM06.length) allNotes.push('... SỰ CỐ VẬN HÀNH: ' + iBM06.join('; '));
   document.getElementById('bm07-v-notes').innerText = allNotes.length ? allNotes.join('\n') : 'Không có ghi nhận.';
   var settings = getStorage(KEYS.settings, DEFAULT_SETTINGS);
-  // ✅ FIX: dùng pickNum thay vì || để không fallback khi = 0
   var costElec = vElec * pickNum(settings.elec, DEFAULT_SETTINGS.elec);
   var costTapWater = vTapWater * pickNum(settings.tapwater, DEFAULT_SETTINGS.tapwater);
   var costChem = 0;
@@ -2534,7 +2401,6 @@ function generateBM09() {
   var vOut = handovers.reduce((a, b) => a + (b.outflow || 0), 0);
   var vElec = handovers.reduce((a, b) => a + (b.elec || 0), 0);
   var vTapWater = getTapWaterUsageInRange(start, end);
-  // ✅ FIX: dùng pickNum
   var costElec = vElec * pickNum(settings.elec, DEFAULT_SETTINGS.elec);
   var costTapWater = vTapWater * pickNum(settings.tapwater, DEFAULT_SETTINGS.tapwater);
   document.getElementById('bm09-v-in').innerText = formatNum(vIn);
@@ -2573,7 +2439,6 @@ function generateBM09() {
     var invEl = document.getElementById('bm09-inv-' + c.key);
     if (invEl) { var stock = (latestChem && latestChem.items && latestChem.items[c.key]) ? latestChem.items[c.key].end : 0; invEl.innerText = formatNum(stock); }
   });
-  // ✅ FIX: dùng pickNum
   var costChem = 0;
   CHEM_LIST.forEach(function(c) { costChem += cTotals[c.key] * pickNum(settings[c.key], DEFAULT_SETTINGS[c.key]); });
   document.getElementById('bm09-v-cost-chem').innerText = formatNum(costChem) + ' VNĐ';
@@ -2592,7 +2457,6 @@ function generateBM09() {
   document.getElementById('bm09-v-bags').innerText = formatNum(slBags);
   document.getElementById('bm09-v-polc-sludge').innerText = formatNum(slPolc);
   document.getElementById('bm09-v-slend').innerText = formatNum(sludgeEndStock) + ' kg';
-  // ✅ FIX
   var costSludge = slDel * pickNum(settings.sludge, DEFAULT_SETTINGS.sludge);
   document.getElementById('bm09-v-cost-sludge').innerText = formatNum(costSludge) + ' VNĐ';
   document.getElementById('bm09-v-total-cost').innerText = formatNum(costElec + costTapWater + costChem + costSludge) + ' VNĐ';
@@ -2861,11 +2725,9 @@ function exportExcelBM(type) {
   } catch (error) { showToast('Lỗi khi xuất Excel: ' + error.message, 'error'); }
 }
 
-// ✅ FIX 1: exportBackup — truyền đúng default để tránh bug `xlnt_settings: []`
 function exportBackup() {
   var backup = {};
   Object.keys(KEYS).forEach(k => {
-    // settings là OBJECT, các key khác là ARRAY
     var defVal = (k === 'settings') ? DEFAULT_SETTINGS : [];
     backup[KEYS[k]] = getStorage(KEYS[k], defVal);
   });
@@ -2879,8 +2741,6 @@ function exportBackup() {
   document.body.appendChild(a); a.click(); a.remove();
   showToast('Xuất backup thành công!', 'success');
 }
-
-// ✅ FIX 3: importBackup — validate kiểu dữ liệu, đặt _updatedAt mới để đảm bảo data này là mới nhất
 function importBackup(e) {
   var file = e.target.files[0];
   if (!file) return;
@@ -2888,10 +2748,8 @@ function importBackup(e) {
   reader.onload = function(evt) {
     try {
       var data = JSON.parse(evt.target.result);
-      var nowISO = new Date().toISOString();
       var settingsSkipped = false;
 
-      // Validate settings: phải là OBJECT không phải array
       if (data['xlnt_settings'] !== undefined) {
         var st = data['xlnt_settings'];
         if (Array.isArray(st) || st === null || typeof st !== 'object') {
@@ -2899,7 +2757,6 @@ function importBackup(e) {
           delete data['xlnt_settings'];
         }
       }
-      // Validate các mảng chính
       ['xlnt_handovers','xlnt_chemicals','xlnt_watertests',
        'xlnt_maintenance','xlnt_sludge','xlnt_oplogs',
        'xlnt_bm04_custom_tasks','xlnt_bm06_custom_tasks'].forEach(k => {
@@ -2908,9 +2765,6 @@ function importBackup(e) {
 
       Object.keys(data).forEach(k => {
         localStorage.setItem(k, JSON.stringify(data[k]));
-        // Đặt _updatedAt mới = now để dữ liệu vừa import được coi là mới nhất
-        localStorage.setItem(k + '_updatedAt', nowISO);
-        if (window.pushToFirebase) window.pushToFirebase(k, data[k]);
       });
 
       if (settingsSkipped) {
@@ -2926,7 +2780,6 @@ function importBackup(e) {
   reader.readAsText(file);
 }
 
-// ✅ FIX 8: loadSettings dùng pickNum để không mất giá trị 0
 function loadSettings() {
   var s = getStorage(KEYS.settings, DEFAULT_SETTINGS);
   document.getElementById('price-elec').value = pickNum(s.elec, DEFAULT_SETTINGS.elec);
@@ -2979,7 +2832,6 @@ function saveSettings(e) {
   if (typeof updateBM01TapWaterHint === 'function') updateBM01TapWaterHint();
 }
 
-// ✅ FIX 9: quickRange dùng todayLocalISO thay vì toISOString (UTC)
 function quickRange(type) {
   var now = new Date();
   var start = new Date(), end = new Date();
@@ -3072,7 +2924,6 @@ function buildDailyStatsHtml() {
 }
 function applyReportFilter() { updateDashboard(); showToast('Đã cập nhật dữ liệu tổng hợp!', 'success'); }
 
-// ✅ FIX 8: updateDashboard dùng pickNum thay vì || để không mất giá trị 0
 function updateDashboard() {
   var mode = document.getElementById('report-view-mode').value;
   var range = getDashboardRange();
@@ -3329,7 +3180,6 @@ function refreshTabData(target) {
   else if (target === 'settings') loadSettings();
 }
 
-// ✅ FIX 5+6: refreshAllUI — KHÔNG đụng đến form đang nhập, KHÔNG push lại data
 let syncTimeout;
 window.refreshAllUI = function() {
   clearTimeout(syncTimeout);
@@ -3338,20 +3188,19 @@ window.refreshAllUI = function() {
       var activeMenu = document.querySelector('.menu-item.active');
       var target = activeMenu ? activeMenu.getAttribute('data-target') : 'dashboard';
 
-      // CHỈ refresh các bảng hiển thị, KHÔNG đụng form đang chỉnh sửa
       if (target === 'dashboard') {
         updateDashboard();
       } else if (target === 'bm01') {
         renderBM01Table();
         updateBM01TapWaterHint();
       } else if (target === 'bm02') {
-        renderBM02Table();   // KHÔNG gọi renderBM02Form()/onBM02DateChange() để tránh mất input
+        renderBM02Table();
       } else if (target === 'bm03') {
         renderBM03List();
       } else if (target === 'bm04') {
-        renderBM04Table();   // KHÔNG gọi generateBM04Tasks() để tránh mất checkbox
+        renderBM04Table();
       } else if (target === 'bm05') {
-        renderBM05Table();   // KHÔNG gọi recalculateSludgeChain() để tránh push rác
+        renderBM05Table();
       } else if (target === 'bm06') {
         renderBM06Table();
       } else if (target === 'bm07') {
@@ -3361,14 +3210,11 @@ window.refreshAllUI = function() {
       } else if (target === 'bm09') {
         generateBM09();
       } else if (target === 'tqt') {
-        // TQT chỉ refresh nếu không có thay đổi đang chờ
         if (window.tqtRefresh && (!window.tqtHasPendingChanges || !window.tqtHasPendingChanges())) {
           window.tqtRefresh();
         }
       }
-      // Settings: KHÔNG refresh form để tránh mất giá trị đang nhập
 
-      // Cập nhật dashboard ngầm
       if (target !== 'dashboard') {
         updateDashboard();
       }
@@ -3382,7 +3228,6 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('current-date').innerText = new Date().toLocaleDateString('vi-VN');
   var today = todayLocalISO();
 
-  // ✅ FIX 9: init date bằng giờ địa phương
   ['bm01-date','bm02-date','bm03-date','bm04-date','bm05-date','bm06-date','bm07-date-input'].forEach(id => { var el = document.getElementById(id); if (el) el.value = today; });
 
   var nowMonth = today.substring(0, 7);
@@ -3440,9 +3285,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<!-- ============================================ -->
-<!-- TQT SCRIPT (FIXED)                           -->
-<!-- ============================================ -->
+<!-- ===================================================== -->
+<!-- ============ TQT — JAVASCRIPT (IIFE) ================ -->
+<!-- ===================================================== -->
 <script>
 (function() {
   'use strict';
@@ -3509,7 +3354,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   var tqtEditOpsDay = null;
   var tqtEditMaintIdx = null;
-  // ✅ FIX 12: timer được reset về null sau khi chạy
   var tqtSaveTimer = null;
 
   function tqtEscapeHtml(s) {
@@ -3534,23 +3378,18 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!tqtStore.maint.length) tqtStore.maint = TQT_SEED_MAINT.map(function(r) { return Object.assign({}, r); });
   }
 
-  // ✅ FIX 11+12: set _updatedAt, clear timer sau khi chạy
   function tqtScheduleSave() {
     clearTimeout(tqtSaveTimer);
     tqtSaveTimer = setTimeout(function() {
       tqtSaveTimer = null;
       try {
         localStorage.setItem(TQT_STORAGE_KEY, JSON.stringify(tqtStore));
-        localStorage.setItem(TQT_STORAGE_KEY + '_updatedAt', new Date().toISOString());
-        if (window.pushToFirebase) {
-          window.pushToFirebase(TQT_STORAGE_KEY, tqtStore);
-        }
+        // Không đẩy lên Firebase nữa
         tqtFlashStatus();
       }
       catch(e) { console.warn('TQT: Không lưu được:', e); }
     }, 300);
   }
-  // ✅ Expose để refreshAllUI kiểm tra
   window.tqtHasPendingChanges = function() { return tqtSaveTimer !== null; };
 
   function tqtFlashStatus() {
