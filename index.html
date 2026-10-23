@@ -115,14 +115,14 @@ input[type="number"]{-moz-appearance:textfield}
 .home-hero p{font-size:15px;opacity:.92;position:relative;z-index:1;max-width:640px;line-height:1.6}
 .home-hero .badges{margin-top:20px;display:flex;flex-wrap:wrap;gap:10px;position:relative;z-index:1}
 .home-hero .badge{background:rgba(255,255,255,.2);backdrop-filter:blur(8px);padding:6px 14px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid rgba(255,255,255,.3)}
-.articles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px}
-.article-card{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06);border:1px solid #e2e8f0;transition:transform .2s,box-shadow .2s;display:flex;flex-direction:column}
+.articles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(350px,1fr));gap:20px;width:100%;max-width:1400px;margin:0 auto}
+.article-card{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06);border:1px solid #e2e8f0;transition:transform .2s,box-shadow .2s;display:flex;flex-direction:column;height:100%}
 .article-card:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.12)}
-.article-card .article-img{width:100%;height:200px;object-fit:cover;background:#f1f5f9}
-.article-card .article-img-placeholder{width:100%;height:200px;background:linear-gradient(135deg,#e0f2fe,#ccfbf1);display:flex;align-items:center;justify-content:center;color:#64748b;font-size:44px}
+.article-card .article-img{width:100%;height:220px;object-fit:cover;background:#f1f5f9}
+.article-card .article-img-placeholder{width:100%;height:220px;background:linear-gradient(135deg,#e0f2fe,#ccfbf1);display:flex;align-items:center;justify-content:center;color:#64748b;font-size:44px}
 .article-card .article-body{padding:18px;flex:1;display:flex;flex-direction:column}
-.article-card .article-title{font-size:16px;font-weight:700;color:#0f172a;margin-bottom:8px;line-height:1.4}
-.article-card .article-content{font-size:13px;color:#475569;line-height:1.6;margin-bottom:12px;flex:1;word-wrap:break-word;white-space:pre-wrap}
+.article-card .article-title{font-size:16px;font-weight:700;color:#0f172a;margin-bottom:8px;line-height:1.4;word-break:break-word}
+.article-card .article-content{font-size:13px;color:#475569;line-height:1.6;margin-bottom:12px;flex:1;word-wrap:break-word;white-space:pre-wrap;overflow-wrap:break-word;max-height: 200px; overflow-y: auto}
 .article-card .article-meta{font-size:11px;color:#94a3b8;display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:10px;border-top:1px solid #f1f5f9}
 .article-card .article-actions{display:flex;gap:6px}
 .article-card .article-actions button{background:#f1f5f9;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;color:#475569;font-weight:600;transition:.15s}
@@ -360,7 +360,7 @@ body.guest-mode .article-actions{display:none}
   <div class="p-5 border-b border-slate-100 flex items-center justify-between">
     <div class="flex items-center space-x-3">
       <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/20"><i class="fas fa-water text-xl"></i></div>
-      <div><h1 class="text-base font-bold text-slate-800 leading-tight">XLNT SÔNG MÂY</h1><p class="text-xs text-slate-500 font-medium" data-i18n="sidebar-subtitle">Hệ thống quản lý nội bộ</p></div>
+      <div><h1 class="text-base font-bold text-slate-800 leading-tight" data-i18n="brand-name">XLNT SÔNG MÂY</h1><p class="text-xs text-slate-500 font-medium" data-i18n="sidebar-subtitle">Hệ thống quản lý nội bộ</p></div>
     </div>
     <button class="md:hidden text-slate-500 hover:text-slate-700" onclick="toggleSidebar()"><i class="fas fa-times text-lg"></i></button>
   </div>
@@ -405,10 +405,10 @@ body.guest-mode .article-actions{display:none}
   </div>
 </header>
 
-<div class="flex-1 overflow-y-auto p-4 md:p-8 relative">
+<div class="flex-1 overflow-y-auto p-4 md:p-8 relative flex flex-col">
 
 <!-- ==================== HOME TAB ==================== -->
-<section id="home" class="tab-content active space-y-6">
+<section id="home" class="tab-content active space-y-6 flex-1">
   <div class="home-hero">
     <h1 data-i18n="home-hero-title">Chào mừng đến với Nhà máy XLNT Sông Mây</h1>
     <p data-i18n="home-hero-desc">Hệ thống quản lý vận hành toàn diện: giao ca, hóa chất, test nhanh, bảo trì, ép bùn, báo cáo và sổ vận hành trạm quan trắc.</p>
@@ -571,7 +571,7 @@ body.guest-mode .article-actions{display:none}
   </div>
 </section>
 
-<!-- ==================== BM-01 (unchanged structure, only added data-i18n) ==================== -->
+<!-- ==================== BM-01 ==================== -->
 <section id="bm01" class="tab-content max-w-5xl mx-auto space-y-6">
   <form id="form-bm01" onsubmit="saveBM01(event)" class="glass-panel p-6 rounded-xl shadow-sm border border-slate-200">
     <input type="hidden" id="bm01-edit-id">
@@ -579,8 +579,8 @@ body.guest-mode .article-actions{display:none}
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
       <div><label class="block text-xs font-semibold text-slate-700 mb-1" data-i18n="label-date-req">Ngày *</label><input type="date" id="bm01-date" required onchange="updateBM01TapWaterHint()" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"></div>
       <div><label class="block text-xs font-semibold text-slate-700 mb-1" data-i18n="label-shift-req">Ca *</label><select id="bm01-shift" required onchange="updateBM01TapWaterHint()" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"><option value="Ca 1">Ca 1 (07:00-15:00)</option><option value="Ca 2">Ca 2 (15:00-23:00)</option><option value="Ca 3">Ca 3 (23:00-07:00)</option></select></div>
-      <div><label class="block text-xs font-semibold text-slate-700 mb-1" data-i18n="label-handover-req">Người bàn giao *</label><select id="bm01-handover" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"><option value="">-- <span data-i18n="opt-choose">Chọn</span> --</option><option>Lâm</option><option>Nhạ</option><option>Hoàng</option><option>Hồ</option><option>Duy</option><option>Chính</option></select></div>
-      <div><label class="block text-xs font-semibold text-slate-700 mb-1" data-i18n="label-receiver-req">Người tiếp nhận *</label><select id="bm01-receiver" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"><option value="">-- <span data-i18n="opt-choose">Chọn</span> --</option><option>Lâm</option><option>Nhạ</option><option>Hoàng</option><option>Hồ</option><option>Duy</option><option>Chính</option></select></div>
+      <div><label class="block text-xs font-semibold text-slate-700 mb-1" data-i18n="label-handover-req">Người bàn giao *</label><select id="bm01-handover" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"><option value="">-- Chọn --</option><option>Lâm</option><option>Nhạ</option><option>Hoàng</option><option>Hồ</option><option>Duy</option><option>Chính</option></select></div>
+      <div><label class="block text-xs font-semibold text-slate-700 mb-1" data-i18n="label-receiver-req">Người tiếp nhận *</label><select id="bm01-receiver" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"><option value="">-- Chọn --</option><option>Lâm</option><option>Nhạ</option><option>Hoàng</option><option>Hồ</option><option>Duy</option><option>Chính</option></select></div>
     </div>
     <h4 class="font-bold text-xs uppercase text-slate-600 mt-5 mb-3 bg-slate-100 p-2 rounded" data-i18n="bm01-shift-meters">Chỉ Số Chốt Ca</h4>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
@@ -1258,6 +1258,11 @@ body.guest-mode .article-actions{display:none}
   </div>
 </section>
 
+<!-- ==================== COPYRIGHT FOOTER ==================== -->
+<footer class="text-center text-xs text-slate-400 py-6 border-t border-slate-200 mt-8 no-print">
+  Copyright by nhatkcnsm@gmail.com
+</footer>
+
 </div>
 </main>
 
@@ -1430,13 +1435,14 @@ body.guest-mode .article-actions{display:none}
   };
 
   window.initFirebaseSync = function() {
-    if (window.t) setSyncStatus('<i class="fas fa-spinner fa-spin text-blue-500 mr-1"></i> ' + window.t('sync-loading'));
+    // Fix lỗi hiển thị "null" khi chưa tải xong
+    setSyncStatus('<i class="fas fa-spinner fa-spin text-blue-500 mr-1"></i> ' + ((window.t && window.t('sync-loading')) || 'Đang tải...'));
     SYNC_KEYS.forEach(key => {
       const docRef = doc(db, "songmay_data", key);
       onSnapshot(docRef, (docSnap) => {
         syncDoneSet.add(key);
         if (syncDoneSet.size >= SYNC_KEYS.length) {
-          setSyncStatus('<i class="fas fa-cloud text-emerald-500 mr-1"></i> ' + (window.t ? window.t('sync-synced') : 'Đã đồng bộ'));
+          setSyncStatus('<i class="fas fa-cloud text-emerald-500 mr-1"></i> ' + ((window.t && window.t('sync-synced')) || 'Đã đồng bộ'));
         }
         if (!docSnap.exists()) return;
         try {
@@ -1455,7 +1461,7 @@ body.guest-mode .article-actions{display:none}
       }, (error) => {
         syncDoneSet.add(key);
         if (syncDoneSet.size >= SYNC_KEYS.length) {
-          setSyncStatus('<i class="fas fa-exclamation-triangle text-rose-500 mr-1"></i> ' + (window.t ? window.t('sync-error') : 'Lỗi kết nối'));
+          setSyncStatus('<i class="fas fa-exclamation-triangle text-rose-500 mr-1"></i> ' + ((window.t && window.t('sync-error')) || 'Lỗi kết nối'));
         }
       });
     });
@@ -1484,6 +1490,7 @@ const I18N = {
     'landing-enter': 'Enter System',
     // Sidebar & menu
     'sidebar-subtitle': 'Internal Management System',
+    'brand-name': 'SONG MAY WWTP',
     'menu-home': 'Home',
     'menu-dashboard': 'Reports & Statistics',
     'menu-bm01': 'BM-01: Shift Handover',
@@ -1802,6 +1809,7 @@ const I18N = {
     'btn-save-sludge': 'Save Sludge Pressing',
     'btn-save-log': 'Save Log',
     'btn-save-changes': 'Save Changes',
+    'btn-delete': 'Delete',
     // TQT
     'tqt-app-title': 'OPERATION – MAINTENANCE LOG OF WASTEWATER MONITORING STATION',
     'tqt-app-subtitle': 'Song May Industrial Park',
@@ -1836,6 +1844,13 @@ const I18N = {
     'tqt-note-3': 'clean pH probe, TSS probe, Amoni meter, check equipment and station parameters',
     'tqt-note-4': 'internet connection lost',
     'tqt-note-5': 'datalogger not receiving signal from measuring device',
+    // Tapwater Hints
+    'tapwater-meter-placeholder': 'Enter meter reading...',
+    'tapwater-shift-hint': 'System only calculates VTL consumption based on Ca 3 readings.',
+    'reading-initial': 'Initial reading',
+    'reading-usage': 'Consumption',
+    'reading-base': 'This is the base reading.',
+    'reading-prev': 'Previous reading',
     // Confirm
     'confirm-title': 'Confirm'
   },
@@ -1852,6 +1867,7 @@ const I18N = {
     'landing-enter': '进入系统',
     // Sidebar
     'sidebar-subtitle': '内部管理系统',
+    'brand-name': '宋梅污水厂',
     'menu-home': '首页',
     'menu-dashboard': '报告与统计',
     'menu-bm01': 'BM-01: 交接班',
@@ -2170,6 +2186,7 @@ const I18N = {
     'btn-save-sludge': '保存压滤',
     'btn-save-log': '保存日志',
     'btn-save-changes': '保存更改',
+    'btn-delete': '删除',
     // TQT
     'tqt-app-title': '废水监测站运行 - 维护日志',
     'tqt-app-subtitle': '宋梅工业区',
@@ -2204,11 +2221,17 @@ const I18N = {
     'tqt-note-3': '清洁 pH 探头、TSS 探头、氨氮计，检查设备和站参数',
     'tqt-note-4': '互联网连接中断',
     'tqt-note-5': '数据记录仪未收到测量设备的信号',
+    // Tapwater Hints
+    'tapwater-meter-placeholder': '请输入水表读数...',
+    'tapwater-shift-hint': '系统仅根据 Ca 3 班次读数计算 VTL 消耗量。',
+    'reading-initial': '初始读数',
+    'reading-usage': '消耗',
+    'reading-base': '这是基准读数。',
+    'reading-prev': '上次读数',
+    // Confirm
     'confirm-title': '确认'
   }
 };
-
-const DATA_I18N_KEYS = {};
 
 let currentLang = 'vi';
 let userMode = 'guest';
@@ -2217,6 +2240,15 @@ function t(key) {
   if (currentLang === 'vi') return null;
   var dict = I18N[currentLang];
   return dict && dict[key] ? dict[key] : null;
+}
+
+function guardGuest() {
+  if (userMode === 'guest') {
+    var msg = currentLang === 'en' ? 'Guest cannot save data' : (currentLang === 'zh' ? '访客无法保存数据' : 'Chế độ Khách không thể lưu dữ liệu');
+    showToast(msg, 'warning');
+    return true;
+  }
+  return false;
 }
 
 function translateTextNode(tn) {
@@ -2238,42 +2270,54 @@ function translateTextNode(tn) {
 
 function translateElement(el) {
   if (!el || el.nodeType !== 1) return;
-  // Skip scripts, styles, and data attributes
   if (['SCRIPT','STYLE','NOSCRIPT'].indexOf(el.tagName) !== -1) return;
-  // data-i18n attribute
+
   var key = el.getAttribute && el.getAttribute('data-i18n');
-  if (key && I18N[currentLang] && I18N[currentLang][key]) {
-    el.textContent = I18N[currentLang][key];
-  }
-  // data-i18n-placeholder
-  var pk = el.getAttribute && el.getAttribute('data-i18n-placeholder');
-  if (pk && I18N[currentLang] && I18N[currentLang][pk]) {
-    el.setAttribute('placeholder', I18N[currentLang][pk]);
-  }
-  // Translate text nodes
-  if (el.childNodes) {
-    for (var i = 0; i < el.childNodes.length; i++) {
-      var child = el.childNodes[i];
-      if (child.nodeType === 3) translateTextNode(child);
-      else if (child.nodeType === 1) translateElement(child);
+  if (key) {
+    if (el._originalI18n === undefined) {
+      el._originalI18n = el.textContent;
+    }
+    if (currentLang === 'vi') {
+      if (el.textContent !== el._originalI18n) el.textContent = el._originalI18n;
+    } else if (I18N[currentLang] && I18N[currentLang][key]) {
+      el.textContent = I18N[currentLang][key];
     }
   }
-  // Translate placeholder
-  if (el.getAttribute) {
+
+  var pk = el.getAttribute && el.getAttribute('data-i18n-placeholder');
+  if (pk) {
+    if (el._originalPlaceholder === undefined) {
+      el._originalPlaceholder = el.getAttribute('placeholder') || '';
+    }
+    if (currentLang === 'vi') {
+      el.setAttribute('placeholder', el._originalPlaceholder);
+    } else if (I18N[currentLang] && I18N[currentLang][pk]) {
+      el.setAttribute('placeholder', I18N[currentLang][pk]);
+    }
+  }
+
+  if (!pk && el.getAttribute) {
     var ph = el.getAttribute('placeholder');
-    if (ph && !pk) {
+    if (ph) {
       if (!el._origPlaceholder) el._origPlaceholder = ph;
       var dict = I18N[currentLang];
       if (dict && dict[el._origPlaceholder]) {
         el.setAttribute('placeholder', dict[el._origPlaceholder]);
       }
     }
-    // Translate title
     var ti = el.getAttribute('title');
     if (ti) {
       if (!el._origTitle) el._origTitle = ti;
       var d2 = I18N[currentLang];
       if (d2 && d2[el._origTitle]) el.setAttribute('title', d2[el._origTitle]);
+    }
+  }
+
+  if (el.childNodes) {
+    for (var i = 0; i < el.childNodes.length; i++) {
+      var child = el.childNodes[i];
+      if (child.nodeType === 3) translateTextNode(child);
+      else if (child.nodeType === 1) translateElement(child);
     }
   }
 }
@@ -2340,7 +2384,6 @@ let selectedMode = 'guest';
 let selectedLang = 'vi';
 
 function initLanding() {
-  // Language buttons
   document.querySelectorAll('#landing-lang-options .landing-option').forEach(function(btn) {
     btn.addEventListener('click', function() {
       document.querySelectorAll('#landing-lang-options .landing-option').forEach(function(b) { b.classList.remove('active'); });
@@ -2349,7 +2392,6 @@ function initLanding() {
       setLanguage(selectedLang);
     });
   });
-  // Mode buttons
   document.querySelectorAll('#landing-mode-options .landing-option').forEach(function(btn) {
     btn.addEventListener('click', function() {
       document.querySelectorAll('#landing-mode-options .landing-option').forEach(function(b) { b.classList.remove('active'); });
@@ -2368,14 +2410,12 @@ function initLanding() {
       }
     });
   });
-  // Enter on password
   var pwInput = document.getElementById('landing-password-input');
   if (pwInput) {
     pwInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') enterApp();
     });
   }
-  // Restore saved lang
   var savedLang = localStorage.getItem('xlnt_lang') || 'vi';
   selectedLang = savedLang;
   setLanguage(savedLang);
@@ -2400,7 +2440,6 @@ function enterApp() {
   var overlay = document.getElementById('landing-overlay');
   overlay.classList.add('hidden');
   setTimeout(function() { overlay.style.display = 'none'; }, 500);
-  // Switch to home tab
   document.querySelectorAll('.menu-item').forEach(function(m) { m.classList.remove('active'); });
   document.querySelectorAll('.tab-content').forEach(function(tc) { tc.classList.remove('active'); });
   var homeMenu = document.querySelector('.menu-item[data-target="home"]');
@@ -2424,13 +2463,11 @@ function applyMode() {
       indicator.innerHTML = '<i class="fas fa-user-cog mr-1"></i><span>' + (t('mode-operator') || 'Vận hành') + '</span>';
     }
   }
-  // Hide settings menu for guest
   var settingsMenu = document.querySelector('.menu-item[data-target="settings"]');
   if (settingsMenu) {
     var li = settingsMenu.closest('li');
     if (li) li.style.display = userMode === 'guest' ? 'none' : '';
   }
-  // Re-render articles to hide/show actions
   if (typeof renderArticles === 'function') renderArticles();
 }
 
@@ -2449,9 +2486,15 @@ function getArticles() {
 }
 
 function setArticles(arr) {
-  localStorage.setItem(ARTICLES_KEY, JSON.stringify(arr));
-  localStorage.setItem(ARTICLES_KEY + '_updatedAt', new Date().toISOString());
-  if (window.pushToFirebase) window.pushToFirebase(ARTICLES_KEY, arr);
+  try {
+    localStorage.setItem(ARTICLES_KEY, JSON.stringify(arr));
+    localStorage.setItem(ARTICLES_KEY + '_updatedAt', new Date().toISOString());
+    if (window.pushToFirebase) window.pushToFirebase(ARTICLES_KEY, arr);
+  } catch (e) {
+    var msg = currentLang === 'en' ? 'Storage full - please delete some articles/images' : (currentLang === 'zh' ? '存储已满 - 请删除一些文章/图片' : 'Bộ nhớ đầy - vui lòng xóa bớt bài viết hoặc ảnh');
+    showToast(msg, 'error');
+    throw e;
+  }
 }
 
 function renderArticles() {
@@ -2474,7 +2517,7 @@ function renderArticles() {
     var actionsHtml = isOperator
       ? '<div class="article-actions">' +
           '<button onclick="openArticleModal(\'' + a.id + '\')"><i class="fas fa-edit mr-1"></i>' + (t('mode-edit') || 'Sửa') + '</button>' +
-          '<button class="del" onclick="deleteArticle(\'' + a.id + '\')"><i class="fas fa-trash mr-1"></i>' + (t('btn-cancel') === 'Cancel' ? 'Delete' : (currentLang === 'zh' ? '删除' : 'Xóa')) + '</button>' +
+          '<button class="del" onclick="deleteArticle(\'' + a.id + '\')"><i class="fas fa-trash mr-1"></i>' + (t('btn-delete') || 'Xóa') + '</button>' +
         '</div>'
       : '';
     var dateLabel = a.date || '';
@@ -2494,6 +2537,7 @@ function renderArticles() {
 let pendingArticleImage = null;
 
 function openArticleModal(id) {
+  if (guardGuest()) return;
   var modal = document.getElementById('article-modal');
   var titleEl = document.getElementById('article-modal-title');
   var editId = document.getElementById('article-edit-id');
@@ -2581,6 +2625,7 @@ function compressImage(file, maxW, quality) {
 }
 
 function saveArticle() {
+  if (guardGuest()) return;
   var id = document.getElementById('article-edit-id').value;
   var title = document.getElementById('article-title-input').value.trim();
   var content = document.getElementById('article-content-input').value.trim();
@@ -2609,20 +2654,23 @@ function saveArticle() {
       updatedAt: now
     });
   }
-  setArticles(articles);
-  renderArticles();
-  closeArticleModal();
-  showToast(t('article-save') ? 'Saved!' : 'Đã lưu bài viết!', 'success');
+  try {
+    setArticles(articles);
+    renderArticles();
+    closeArticleModal();
+    var okMsg = currentLang === 'vi' ? 'Đã lưu bài viết!' : (currentLang === 'en' ? 'Article saved!' : '文章已保存！');
+    showToast(okMsg, 'success');
+  } catch(e) { /* error already handled in setArticles */ }
 }
 
 function deleteArticle(id) {
+  if (guardGuest()) return;
   showConfirm(
     t('confirm-title') || 'Xác nhận',
     t('article-delete-confirm') || 'Bạn có chắc muốn xóa bài viết này?',
     function() {
       var articles = getArticles().filter(function(a) { return a.id !== id; });
-      setArticles(articles);
-      renderArticles();
+      try { setArticles(articles); renderArticles(); } catch(e) {}
     }
   );
 }
@@ -2921,6 +2969,7 @@ function recalculateSludgeChain() {
   if (JSON.stringify(sorted) !== original) setStorage(KEYS.sludge, sorted);
 }
 function manualSyncSludge() {
+  if (guardGuest()) return;
   recalculateSludgeChain(); renderBM05Table(); updateDashboard();
   var editId = document.getElementById('bm05-edit-id').value;
   if (!editId) onBM05DateChange();
@@ -2950,6 +2999,7 @@ function renderCustomTasks04() {
   ).join('');
 }
 function addOtherTask04() {
+  if (guardGuest()) return;
   const input = document.getElementById('bm04-other-task');
   const taskText = input.value.trim();
   if (!taskText) { showToast('Empty', 'warning'); return; }
@@ -2959,12 +3009,14 @@ function addOtherTask04() {
   input.value = ''; generateBM04Tasks();
 }
 function removeOtherTask04(idx) {
+  if (guardGuest()) return;
   showConfirm('Xác nhận', 'Xóa?', function() {
     const customTasks = getCustomTasks(CUSTOM_TASKS_BM04_KEY);
     if (idx >= 0 && idx < customTasks.length) { customTasks.splice(idx, 1); setCustomTasks(CUSTOM_TASKS_BM04_KEY, customTasks); showToast('Deleted', 'success'); generateBM04Tasks(); }
   });
 }
 function editOtherTask04(idx) {
+  if (guardGuest()) return;
   const customTasks = getCustomTasks(CUSTOM_TASKS_BM04_KEY);
   if (idx < 0 || idx >= customTasks.length) return;
   const newText = prompt('Edit:', customTasks[idx]);
@@ -2975,6 +3027,7 @@ function editOtherTask04(idx) {
 }
 function saveBM04(e) {
   e.preventDefault();
+  if (guardGuest()) return;
   const id = document.getElementById('bm04-edit-id').value;
   const mainChecked = Array.from(document.querySelectorAll('#bm04-task-list input[type="checkbox"]:checked')).map(x => x.value);
   const freq = document.getElementById('bm04-frequency').value;
@@ -2997,6 +3050,7 @@ function renderBM04Table() {
   if (currentLang !== 'vi') applyLanguage();
 }
 function editBM04(id) {
+  if (guardGuest()) return;
   const list = getStorage(KEYS.maintenance);
   const item = list.find(x => x.id === id);
   if (!item) return;
@@ -3023,6 +3077,7 @@ function cancelEditBM04() {
   document.getElementById('bm04-btn-cancel').classList.add('hidden');
 }
 function deleteBM04(id) {
+  if (guardGuest()) return;
   showConfirm('Xác nhận', 'Xóa?', () => {
     let list = getStorage(KEYS.maintenance).filter(x => x.id !== id);
     setStorage(KEYS.maintenance, list);
@@ -3049,6 +3104,7 @@ function renderOtherTasks06() {
   ).join('');
 }
 function addOtherTask06() {
+  if (guardGuest()) return;
   const input = document.getElementById('bm06-other-task');
   const taskText = input.value.trim();
   if (!taskText) { showToast('Empty', 'warning'); return; }
@@ -3057,12 +3113,14 @@ function addOtherTask06() {
   input.value = ''; updateBM06Checklist();
 }
 function removeOtherTask06(idx) {
+  if (guardGuest()) return;
   showConfirm('Xác nhận', 'Xóa?', () => {
     const customTasks = getCustomTasks(CUSTOM_TASKS_BM06_KEY);
     if (idx >= 0 && idx < customTasks.length) { customTasks.splice(idx, 1); setCustomTasks(CUSTOM_TASKS_BM06_KEY, customTasks); otherTasks06 = customTasks; updateBM06Checklist(); }
   });
 }
 function editOtherTask06(idx) {
+  if (guardGuest()) return;
   const customTasks = getCustomTasks(CUSTOM_TASKS_BM06_KEY);
   if (idx < 0 || idx >= customTasks.length) return;
   const newText = prompt('Edit:', customTasks[idx]);
@@ -3073,6 +3131,7 @@ function editOtherTask06(idx) {
 }
 function saveBM06(e) {
   e.preventDefault();
+  if (guardGuest()) return;
   var id = document.getElementById('bm06-edit-id').value;
   var checked = Array.from(document.querySelectorAll('input[name="bm06-task"]:checked')).map(x => x.value);
   var item = { id: id || generateId(), date: document.getElementById('bm06-date').value, shift: document.getElementById('bm06-shift').value, staff: document.getElementById('bm06-staff').value, startTime: document.getElementById('bm06-start').value, tasks: checked, notes: document.getElementById('bm06-notes').value, incidents: document.getElementById('bm06-incidents').value };
@@ -3093,6 +3152,7 @@ function renderBM06Table() {
   if (currentLang !== 'vi') applyLanguage();
 }
 function editBM06(id) {
+  if (guardGuest()) return;
   var list = getStorage(KEYS.operationLogs);
   var item = list.find(x => x.id === id);
   if (!item) return;
@@ -3120,6 +3180,7 @@ function cancelEditBM06() {
   document.getElementById('bm06-btn-cancel').classList.add('hidden');
 }
 function deleteBM06(id) {
+  if (guardGuest()) return;
   showConfirm('Xác nhận', 'Xóa?', () => {
     var list = getStorage(KEYS.operationLogs).filter(x => x.id !== id);
     setStorage(KEYS.operationLogs, list);
@@ -3129,6 +3190,7 @@ function deleteBM06(id) {
 
 function saveBM01(e) {
   e.preventDefault();
+  if (guardGuest()) return;
   var id = document.getElementById('bm01-edit-id').value;
   var shift = document.getElementById('bm01-shift').value;
   var tapWaterVal = document.getElementById('bm01-tapwater').value;
@@ -3173,6 +3235,7 @@ function renderBM01Table() {
   if (currentLang !== 'vi') applyLanguage();
 }
 function editBM01(id) {
+  if (guardGuest()) return;
   var list = getStorage(KEYS.handovers);
   var item = list.find(x => x.id === id);
   if (!item) return;
@@ -3210,6 +3273,7 @@ function cancelEditBM01() {
   updateBM01TapWaterHint();
 }
 function deleteBM01(id) {
+  if (guardGuest()) return;
   showConfirm('Xác nhận', 'Xóa?', () => {
     var list = getStorage(KEYS.handovers).filter(x => x.id !== id);
     setStorage(KEYS.handovers, list);
@@ -3283,6 +3347,7 @@ function onBM02DateChange() {
   updateBM02StockLockState();
 }
 function saveBM02() {
+  if (guardGuest()) return;
   var date = document.getElementById('bm02-date').value;
   var shift = document.getElementById('bm02-shift').value;
   if (!date) { showToast('Date required', 'warning'); return; }
@@ -3329,6 +3394,7 @@ function renderBM02Table() {
   if (currentLang !== 'vi') applyLanguage();
 }
 function editBM02(id) {
+  if (guardGuest()) return;
   var list = getStorage(KEYS.chemicals);
   var item = list.find(x => x.id === id);
   if (!item) return;
@@ -3355,6 +3421,7 @@ function cancelEditBM02() {
   onBM02DateChange();
 }
 function deleteBM02(id) {
+  if (guardGuest()) return;
   showConfirm('Xác nhận', 'Xóa?', () => {
     var list = getStorage(KEYS.chemicals).filter(x => x.id !== id);
     setStorage(KEYS.chemicals, list);
@@ -3366,6 +3433,7 @@ function deleteBM02(id) {
 
 function saveBM03(e) {
   e.preventDefault();
+  if (guardGuest()) return;
   var id = document.getElementById('bm03-edit-id').value;
   var item = {
     id: id || generateId(), date: document.getElementById('bm03-date').value,
@@ -3409,6 +3477,7 @@ function renderBM03List() {
   if (currentLang !== 'vi') applyLanguage();
 }
 function editBM03(id) {
+  if (guardGuest()) return;
   var list = getStorage(KEYS.waterTests);
   var item = list.find(x => x.id === id);
   if (!item) return;
@@ -3437,6 +3506,7 @@ function cancelEditBM03() {
   document.getElementById('bm03-btn-cancel').classList.add('hidden');
 }
 function deleteBM03(id) {
+  if (guardGuest()) return;
   showConfirm('Xác nhận', 'Xóa?', () => {
     var list = getStorage(KEYS.waterTests).filter(x => x.id !== id);
     setStorage(KEYS.waterTests, list);
@@ -3494,6 +3564,7 @@ function onBM05DateChange() {
 }
 function saveBM05(e) {
   e.preventDefault();
+  if (guardGuest()) return;
   var id = document.getElementById('bm05-edit-id').value;
   var start = parseFloat(document.getElementById('bm05-sludge-start').value) || 0;
   var gen = parseFloat(document.getElementById('bm05-sludge-gen').value) || 0;
@@ -3531,6 +3602,7 @@ function renderBM05Table() {
   if (currentLang !== 'vi') applyLanguage();
 }
 function editBM05(id) {
+  if (guardGuest()) return;
   var list = getStorage(KEYS.sludge);
   var item = list.find(x => x.id === id);
   if (!item) return;
@@ -3559,6 +3631,7 @@ function cancelEditBM05() {
   onBM05DateChange();
 }
 function deleteBM05(id) {
+  if (guardGuest()) return;
   showConfirm('Xác nhận', 'Xóa?', () => {
     var list = getStorage(KEYS.sludge).filter(x => x.id !== id);
     setStorage(KEYS.sludge, list);
@@ -4080,6 +4153,7 @@ function exportBackup() {
   showToast('Exported!', 'success');
 }
 function importBackup(e) {
+  if (guardGuest()) return;
   var file = e.target.files[0];
   if (!file) return;
   var reader = new FileReader();
@@ -4127,6 +4201,7 @@ function loadSettings() {
 }
 function saveSettings(e) {
   e.preventDefault();
+  if (guardGuest()) return;
   var initTapWaterVal = parseMeterInput(document.getElementById('init-tapwater').value);
   var s = {
     elec: parseFloat(document.getElementById('price-elec').value) || 0,
