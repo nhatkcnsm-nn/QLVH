@@ -115,14 +115,14 @@ input[type="number"]{-moz-appearance:textfield}
 .home-hero p{font-size:15px;opacity:.92;position:relative;z-index:1;max-width:640px;line-height:1.6}
 .home-hero .badges{margin-top:20px;display:flex;flex-wrap:wrap;gap:10px;position:relative;z-index:1}
 .home-hero .badge{background:rgba(255,255,255,.2);backdrop-filter:blur(8px);padding:6px 14px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid rgba(255,255,255,.3)}
-.articles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(350px,1fr));gap:20px;width:100%;max-width:1400px;margin:0 auto}
-.article-card{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06);border:1px solid #e2e8f0;transition:transform .2s,box-shadow .2s;display:flex;flex-direction:column;height:100%}
+.articles-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px}
+.article-card{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06);border:1px solid #e2e8f0;transition:transform .2s,box-shadow .2s;display:flex;flex-direction:column;max-width:800px;margin:0 auto;width:100%}
 .article-card:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.12)}
-.article-card .article-img{width:100%;height:220px;object-fit:cover;background:#f1f5f9}
-.article-card .article-img-placeholder{width:100%;height:220px;background:linear-gradient(135deg,#e0f2fe,#ccfbf1);display:flex;align-items:center;justify-content:center;color:#64748b;font-size:44px}
+.article-card .article-img{width:100%;height:200px;object-fit:cover;background:#f1f5f9}
+.article-card .article-img-placeholder{width:100%;height:200px;background:linear-gradient(135deg,#e0f2fe,#ccfbf1);display:flex;align-items:center;justify-content:center;color:#64748b;font-size:44px}
 .article-card .article-body{padding:18px;flex:1;display:flex;flex-direction:column}
-.article-card .article-title{font-size:16px;font-weight:700;color:#0f172a;margin-bottom:8px;line-height:1.4;word-break:break-word}
-.article-card .article-content{font-size:13px;color:#475569;line-height:1.6;margin-bottom:12px;flex:1;word-wrap:break-word;white-space:pre-wrap;overflow-wrap:break-word;max-height: 200px; overflow-y: auto}
+.article-card .article-title{font-size:16px;font-weight:700;color:#0f172a;margin-bottom:8px;line-height:1.4}
+.article-card .article-content{font-size:13px;color:#475569;line-height:1.6;margin-bottom:12px;flex:1;word-wrap:break-word;white-space:pre-wrap}
 .article-card .article-meta{font-size:11px;color:#94a3b8;display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:10px;border-top:1px solid #f1f5f9}
 .article-card .article-actions{display:flex;gap:6px}
 .article-card .article-actions button{background:#f1f5f9;border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;color:#475569;font-weight:600;transition:.15s}
@@ -1435,14 +1435,13 @@ body.guest-mode .article-actions{display:none}
   };
 
   window.initFirebaseSync = function() {
-    // Fix lỗi hiển thị "null" khi chưa tải xong
-    setSyncStatus('<i class="fas fa-spinner fa-spin text-blue-500 mr-1"></i> ' + ((window.t && window.t('sync-loading')) || 'Đang tải...'));
+    if (window.t) setSyncStatus('<i class="fas fa-spinner fa-spin text-blue-500 mr-1"></i> ' + window.t('sync-loading'));
     SYNC_KEYS.forEach(key => {
       const docRef = doc(db, "songmay_data", key);
       onSnapshot(docRef, (docSnap) => {
         syncDoneSet.add(key);
         if (syncDoneSet.size >= SYNC_KEYS.length) {
-          setSyncStatus('<i class="fas fa-cloud text-emerald-500 mr-1"></i> ' + ((window.t && window.t('sync-synced')) || 'Đã đồng bộ'));
+          setSyncStatus('<i class="fas fa-cloud text-emerald-500 mr-1"></i> ' + (window.t ? window.t('sync-synced') : 'Đã đồng bộ'));
         }
         if (!docSnap.exists()) return;
         try {
@@ -1461,7 +1460,7 @@ body.guest-mode .article-actions{display:none}
       }, (error) => {
         syncDoneSet.add(key);
         if (syncDoneSet.size >= SYNC_KEYS.length) {
-          setSyncStatus('<i class="fas fa-exclamation-triangle text-rose-500 mr-1"></i> ' + ((window.t && window.t('sync-error')) || 'Lỗi kết nối'));
+          setSyncStatus('<i class="fas fa-exclamation-triangle text-rose-500 mr-1"></i> ' + (window.t ? window.t('sync-error') : 'Lỗi kết nối'));
         }
       });
     });
@@ -1809,7 +1808,6 @@ const I18N = {
     'btn-save-sludge': 'Save Sludge Pressing',
     'btn-save-log': 'Save Log',
     'btn-save-changes': 'Save Changes',
-    'btn-delete': 'Delete',
     // TQT
     'tqt-app-title': 'OPERATION – MAINTENANCE LOG OF WASTEWATER MONITORING STATION',
     'tqt-app-subtitle': 'Song May Industrial Park',
@@ -2186,7 +2184,6 @@ const I18N = {
     'btn-save-sludge': '保存压滤',
     'btn-save-log': '保存日志',
     'btn-save-changes': '保存更改',
-    'btn-delete': '删除',
     // TQT
     'tqt-app-title': '废水监测站运行 - 维护日志',
     'tqt-app-subtitle': '宋梅工业区',
@@ -2517,7 +2514,7 @@ function renderArticles() {
     var actionsHtml = isOperator
       ? '<div class="article-actions">' +
           '<button onclick="openArticleModal(\'' + a.id + '\')"><i class="fas fa-edit mr-1"></i>' + (t('mode-edit') || 'Sửa') + '</button>' +
-          '<button class="del" onclick="deleteArticle(\'' + a.id + '\')"><i class="fas fa-trash mr-1"></i>' + (t('btn-delete') || 'Xóa') + '</button>' +
+          '<button class="del" onclick="deleteArticle(\'' + a.id + '\')"><i class="fas fa-trash mr-1"></i>' + (t('btn-cancel') === 'Cancel' ? 'Delete' : (currentLang === 'zh' ? '删除' : 'Xóa')) + '</button>' +
         '</div>'
       : '';
     var dateLabel = a.date || '';
