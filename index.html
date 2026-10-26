@@ -1136,8 +1136,9 @@ input[type="number"]{-moz-appearance:textfield}
     <div class="flex flex-wrap gap-3">
       <button onclick="exportBackup()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold flex items-center"><i class="fas fa-download mr-2"></i> Xuất Backup JSON</button>
       <label class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold flex items-center cursor-pointer"><i class="fas fa-upload mr-2"></i> Phục hồi Dữ liệu<input type="file" id="import-file" class="hidden" accept=".json" onchange="importBackup(event)"></label>
+      <button onclick="forceCloudSync()" class="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold flex items-center"><i class="fas fa-cloud-upload-alt mr-2"></i> Force Sync Cloud</button>
     </div>
-    <p class="text-xs text-slate-400 mt-3"><i class="fas fa-info-circle mr-1"></i> File JSON bao gồm tất cả dữ liệu các biểu mẫu, cài đặt đơn giá, và sổ vận hành TQT.</p>
+    <p class="text-xs text-slate-400 mt-3"><i class="fas fa-info-circle mr-1"></i> File JSON bao gồm tất cả dữ liệu các biểu mẫu, cài đặt đơn giá, và sổ vận hành TQT. <b>Force Sync</b> sẽ tải lại dữ liệu mới nhất từ cloud và gộp thêm dữ liệu local.</p>
   </div>
 </section>
 
@@ -1253,11 +1254,11 @@ input[type="number"]{-moz-appearance:textfield}
 </div>
 
 <!-- ============================================ -->
-<!-- FIREBASE MODULE (FIXED SYNC)                 -->
+<!-- FIREBASE MODULE (MERGE-AWARE SYNC)           -->
 <!-- ============================================ -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDq13o2UoTVFY58ARpQFN_EzadGe8dUkTw",
@@ -1278,80 +1279,92 @@ input[type="number"]{-moz-appearance:textfield}
     'xlnt_maintenance', 'xlnt_sludge', 'xlnt_oplogs',
     'xlnt_bm04_custom_tasks', 'xlnt_bm06_custom_tasks', 'songmay_tqt_log_v1'
   ];
-  const syncDoneSet = new Set();
+
+  let pendingCount = SYNC_KEYS.length;
 
   function setSyncStatus(html) {
     var el = document.getElementById('sync-text');
     if (el) el.innerHTML = html;
   }
 
-  window.pushToFirebase = async function(key, val) {
+  // Push với RETRY tự động
+  window.pushToFirebase = async function(key, val, retryCount) {
+    retryCount = retryCount || 0;
     try {
-      var updatedAt = localStorage.getItem(key + '_updatedAt') || new Date().toISOString();
+      var updatedAt = new Date().toISOString();
+      localStorage.setItem(key + '_updatedAt', updatedAt);
       await setDoc(doc(db, "songmay_data", key), {
         data: val,
         updatedAt: updatedAt
       });
-      if (syncDoneSet.size >= SYNC_KEYS.length) {
-        setSyncStatus('<i class="fas fa-cloud text-emerald-500 mr-1"></i> Đã đồng bộ');
-      }
+      setSyncStatus('<i class="fas fa-cloud text-emerald-500 mr-1"></i> Đã đồng bộ');
     } catch (e) {
-      console.error("Lỗi lưu mây:", key, e);
-      setSyncStatus('<i class="fas fa-exclamation-triangle text-rose-500 mr-1"></i> Lỗi đồng bộ');
+      console.error("Lỗi lưu mây:", key, e, "retry:", retryCount);
+      setSyncStatus('<i class="fas fa-exclamation-triangle text-rose-500 mr-1"></i> Lỗi đồng bộ - đang thử lại...');
+      if (retryCount < 5) {
+        setTimeout(function() {
+          window.pushToFirebase(key, val, retryCount + 1);
+        }, 5000 * (retryCount + 1));
+      } else {
+        setSyncStatus('<i class="fas fa-times-circle text-rose-600 mr-1"></i> Lỗi đồng bộ - nhấn Force Sync');
+      }
     }
   };
 
   window.initFirebaseSync = function() {
     setSyncStatus('<i class="fas fa-spinner fa-spin text-blue-500 mr-1"></i> Đang tải...');
-    
-    SYNC_KEYS.forEach(key => {
+    pendingCount = SYNC_KEYS.length;
+
+    SYNC_KEYS.forEach(function(key) {
       const docRef = doc(db, "songmay_data", key);
-      onSnapshot(docRef, (docSnap) => {
-        syncDoneSet.add(key);
-        if (syncDoneSet.size >= SYNC_KEYS.length) {
+      onSnapshot(docRef, function(docSnap) {
+        if (pendingCount > 0) pendingCount--;
+        if (pendingCount <= 0) {
           setSyncStatus('<i class="fas fa-cloud text-emerald-500 mr-1"></i> Đã đồng bộ');
         }
-
         if (!docSnap.exists()) return;
-        
         try {
-          const cloudData = docSnap.data().data;
-          const cloudUpdatedAt = docSnap.data().updatedAt || '';
-          const localUpdatedAt = localStorage.getItem(key + '_updatedAt') || '';
-
-          // BẢO VỆ DỮ LIỆU: Chỉ nhận dữ liệu mây nếu mây MỚI HƠN máy tính
-          if (!localUpdatedAt || (cloudUpdatedAt && cloudUpdatedAt > localUpdatedAt)) {
-            const newStr = JSON.stringify(cloudData);
-            if (localStorage.getItem(key) !== newStr) {
-              localStorage.setItem(key, newStr);
-              localStorage.setItem(key + '_updatedAt', cloudUpdatedAt);
-              console.log("⬇️ Nhận dữ liệu mới từ mây:", key, "@", cloudUpdatedAt);
-              if (typeof window.refreshAllUI === 'function') {
-                window.refreshAllUI();
-              }
-            }
+          if (typeof window.handleCloudUpdate === 'function') {
+            window.handleCloudUpdate(key, docSnap.data().data, docSnap.data().updatedAt || '');
           }
-        } catch(e) {
-          console.warn("Snapshot handler error:", key, e);
-        }
-      }, (error) => {
-        syncDoneSet.add(key);
-        if (syncDoneSet.size >= SYNC_KEYS.length) {
+        } catch(e) { console.warn("Snapshot handler error:", key, e); }
+      }, function(error) {
+        if (pendingCount > 0) pendingCount--;
+        if (pendingCount <= 0) {
           setSyncStatus('<i class="fas fa-exclamation-triangle text-rose-500 mr-1"></i> Lỗi kết nối');
         }
+        console.error("onSnapshot error:", key, error);
       });
     });
+  };
+
+  // Force-sync thủ công
+  window.forceCloudSync = async function() {
+    var ok = 0, err = 0;
+    for (var i = 0; i < SYNC_KEYS.length; i++) {
+      var key = SYNC_KEYS[i];
+      try {
+        var snap = await getDoc(doc(db, "songmay_data", key));
+        if (snap.exists() && typeof window.handleCloudUpdate === 'function') {
+          window.handleCloudUpdate(key, snap.data().data, snap.data().updatedAt || '');
+        }
+        ok++;
+      } catch(e) { err++; console.error("Force sync error:", key, e); }
+    }
+    if (typeof showToast === 'function') {
+      showToast('Force Sync: ' + ok + ' OK, ' + err + ' lỗi', err > 0 ? 'warning' : 'success');
+    }
   };
 
   window.initFirebaseSync();
 </script>
 
 <!-- ============================================ -->
-<!-- MAIN APP SCRIPT (FIXED CALCULATIONS & SYNC) -->
+<!-- MAIN APP SCRIPT                              -->
 <!-- ============================================ -->
 <script>
 // ============================================================
-// HỆ THỐNG XỬ LÝ SỰ KIỆN VÀ DỮ LIỆU (QLVH) — v4 FINAL
+// HỆ THỐNG XỬ LÝ SỰ KIỆN VÀ DỮ LIỆU (QLVH) — v5 SYNC-SAFE
 // ============================================================
 const KEYS = {
   settings: 'xlnt_settings', handovers: 'xlnt_handovers', chemicals: 'xlnt_chemicals',
@@ -1362,7 +1375,6 @@ const CHEM_LIST = [
   { key: 'naoh', name: 'NaOH' }, { key: 'chlorine', name: 'Chlorine' }, { key: 'matri', name: 'Mật rỉ' }
 ];
 
-// ĐÃ CẬP NHẬT SỐ MẶC ĐỊNH THEO YÊU CẦU
 const DEFAULT_SETTINGS = {
   elec: 2280, tapwater: 12075,
   pac: 7700, pola: 33500, polc: 48000, naoh: 16500, chlorine: 33500, matri: 6800, sludge: 2916,
@@ -1388,14 +1400,15 @@ let wordExportType = null;
 let wordExportFileName = null;
 let bm02StockUnlocked = false;
 
-// HÀM LẤY SỐ AN TOÀN (Không fallback khi giá trị = 0)
+// META FIELDS — không hiển thị ở UI/Excel
+const META_FIELDS = ['_ts', '_deleted'];
+
 function pickNum(val, fallback) {
   if (val === undefined || val === null || val === '') return fallback;
   var n = Number(val);
   return isNaN(n) ? fallback : n;
 }
 
-// HÀM LẤY NGÀY LOCAL (Tránh lỗi UTC ±1 ngày)
 function todayLocalISO() {
   var d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
@@ -1408,32 +1421,18 @@ function getShiftOrder(shift) {
   return isNaN(num) ? 0 : num;
 }
 
-const BM04_TASKS = {
-  daily: ['Trạm bơm đầu vào: Kiểm tra trạng thái hoạt động bơm chìm','Song chắn rác: Xả rác tại máy vớt rác thô/tinh tự động','Máy ép rác: Kiểm tra tình trạng kẹt rác','Hệ thống khí: Kiểm tra áp suất, độ rung nhiệt độ máy thổi khí','Hóa chất: Kiểm tra mức PAC, Polymer, NaOH trong bồn định lượng','Bơm định lượng: Kiểm tra tình trạng chảy của bơm định lượng','Giám sát SCADA: Ghi nhận điện áp, dòng điện, DO, pH, ORP, TSS','Tủ điều khiển: Kiểm tra đèn báo, tín hiệu PLC/SCADA'],
-  weekly: ['Vệ sinh cảm biến: Vệ sinh đầu đo DO, pH, TSS, COD online','Máy ép bùn: Vệ sinh vòi phun rửa băng tải cao áp','Máy ép bùn: Kiểm tra độ lệch băng tải','Máy ép bùn: Kiểm tra hệ thống khí nén căng băng','Máy ép bùn: Xả cặn nước ngưng tụ bình tích khí','Bể lắng: Vệ sinh máng răng cưa bể lắng sinh học','Bể Anoxic: Kiểm tra hoạt động máy khuấy chìm','Cầu gạt bùn: Kiểm tra hoạt động quay'],
-  monthly: ['Tủ điện MCC/PLC: Vệ sinh bụi bẩn','Tủ điện: Siết lại các đầu cọc đấu nối động cơ','Rơ-le nhiệt: Kiểm tra dòng tải','Van bướm: Kiểm tra hoạt động van điều khiển điện/khí nén','Vòng bi: Tra mỡ máy gạt bùn, máy ép bùn','Máy thổi khí: Kiểm tra độ căng dây curoa','Máy thổi khí: Vệ sinh phin lọc gió đầu vào'],
-  quarterly: ['Máy thổi khí: Thay dầu bôi trơn (ISO VG 150/220)','Máy khuấy chìm: Thay dầu hộp số','Bơm chìm: Đo điện trở cách điện (Megohmmeter)','Bơm chìm: Kiểm tra độ mòn cánh bơm, phớt cơ khí','Thiết bị đo: Hiệu chuẩn toàn bộ thiết bị đo lường online','Hệ thống khí: Kiểm tra áp suất bình tích khí'],
-  yearly: ['Đại tu bơm RAS/WAS: Tháo kiểm tra, thay thế vòng bi','Đại tu bơm RAS/WAS: Thay thế phớt cơ khí','Đại tu máy thổi khí: Tháo kiểm tra vòng bi, phớt','Hệ thống đĩa phân phối khí: Rút nước kiểm tra đĩa EDI/Jaeger','Đĩa phân phối khí: Thay thế đĩa bị rách, nghẹt cáu cặn','Bình chịu áp lực: Kiểm định an toàn','Hệ thống chống sét: Kiểm tra tiếp địa, chống sét','Thiết bị nâng hạ: Kiểm tra pa-păng trạm bơm','Đồng hồ đo lưu lượng: Hiệu chuẩn đồng hồ điện từ']
-};
-
-const BM06_TASKS = [
-  'Kiểm tra mực nước bể điều hòa','Kiểm tra độ đục, màu sắc nước đầu ra','Vệ sinh bơm định lượng & ống dẫn hóa chất',
-  'Ghi chép chỉ số đồng hồ điện, nước','Thu gom rác tại hố thu','Vệ sinh khu vực nhà điều hành'
-];
-
-const COST_WARNING_TEXT = 'Đây là chi phí gần đúng nhằm mục đích tham khảo nội bộ, không chính xác 100%.';
-
 function generateId() { return Date.now().toString(36) + Math.random().toString(36).substring(2, 7); }
 
-function getStorage(key, defaultVal) {
+// ============================================================
+// STORAGE — ĐỌC RAW (giữ tombstone) vs ĐỌC FILTERED (cho UI)
+// ============================================================
+function getRawStorage(key, defaultVal) {
   if (defaultVal === undefined) defaultVal = [];
   try {
-    const data = localStorage.getItem(key);
+    var data = localStorage.getItem(key);
     if (!data) return defaultVal;
-    const parsed = JSON.parse(data);
-    if (Array.isArray(defaultVal)) {
-      return Array.isArray(parsed) ? parsed : defaultVal;
-    }
+    var parsed = JSON.parse(data);
+    if (Array.isArray(defaultVal)) return Array.isArray(parsed) ? parsed : defaultVal;
     if (defaultVal !== null && typeof defaultVal === 'object') {
       if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
         return defaultVal;
@@ -1444,14 +1443,101 @@ function getStorage(key, defaultVal) {
   } catch (e) { return defaultVal; }
 }
 
-function setStorage(key, val) {
-  localStorage.setItem(key, JSON.stringify(val));
-  localStorage.setItem(key + '_updatedAt', new Date().toISOString()); // Dán nhãn thời gian
-  if (window.pushToFirebase) {
-    window.pushToFirebase(key, val);
+// getStorage: tự động lọc bỏ các record đã xóa mềm (_deleted)
+function getStorage(key, defaultVal) {
+  if (defaultVal === undefined) defaultVal = [];
+  var raw = getRawStorage(key, defaultVal);
+  if (Array.isArray(raw)) {
+    return raw.filter(function(x) { return !x || typeof x !== 'object' || !x._deleted; });
   }
+  return raw;
 }
 
+function setStorage(key, val) {
+  localStorage.setItem(key, JSON.stringify(val));
+  localStorage.setItem(key + '_updatedAt', new Date().toISOString());
+  if (window.pushToFirebase) window.pushToFirebase(key, val);
+}
+
+// ============================================================
+// MERGE LOGIC — TRÁI TIM CỦA ĐỒNG BỘ ĐA MÁY
+// ============================================================
+var ARRAY_SYNC_KEYS = [
+  'xlnt_handovers','xlnt_chemicals','xlnt_watertests',
+  'xlnt_maintenance','xlnt_sludge','xlnt_oplogs',
+  'xlnt_bm04_custom_tasks','xlnt_bm06_custom_tasks'
+];
+
+function mergeArrayData(localArr, cloudArr) {
+  var map = new Map();
+  (localArr || []).forEach(function(r) {
+    if (r && typeof r === 'object' && r.id) map.set('id:' + r.id, r);
+    else if (typeof r === 'string') map.set('s:' + r, r);
+  });
+  (cloudArr || []).forEach(function(c) {
+    if (c && typeof c === 'object' && c.id) {
+      var k = 'id:' + c.id;
+      var ex = map.get(k);
+      if (!ex) { map.set(k, c); return; }
+      var eTs = ex._ts || 0, cTs = c._ts || 0;
+      if (cTs > eTs) map.set(k, c);
+      else if (cTs === eTs && JSON.stringify(c) > JSON.stringify(ex)) map.set(k, c);
+    } else if (typeof c === 'string') {
+      map.set('s:' + c, c);
+    }
+  });
+  var result = Array.from(map.values());
+  result.sort(function(a, b) {
+    if (typeof a === 'string' || typeof b === 'string') return 0;
+    var da = String(a.date || a.name || '');
+    var db = String(b.date || b.name || '');
+    if (da !== db) return db.localeCompare(da);
+    return String(a.id || '').localeCompare(String(b.id || ''));
+  });
+  return result;
+}
+
+window.handleCloudUpdate = function(key, cloudData, cloudUpdatedAt) {
+  try {
+    if (ARRAY_SYNC_KEYS.indexOf(key) !== -1) {
+      var localRaw = getRawStorage(key, []);
+      var merged = mergeArrayData(localRaw, cloudData || []);
+      var mergedStr = JSON.stringify(merged);
+      var localStr = JSON.stringify(localRaw);
+      if (localStr !== mergedStr) {
+        localStorage.setItem(key, mergedStr);
+        localStorage.setItem(key + '_updatedAt', new Date().toISOString());
+        if (typeof window.refreshAllUI === 'function') window.refreshAllUI();
+      }
+      // Nếu cloud thiếu dữ liệu đã merge được → push ngược lại để các máy khác nhận
+      var cloudStr = JSON.stringify(cloudData || []);
+      if (cloudStr !== mergedStr && window.pushToFirebase) {
+        window.pushToFirebase(key, merged);
+      }
+    } else {
+      // Object keys (settings, TQT): so sánh timestamp
+      var localUpdatedAt = localStorage.getItem(key + '_updatedAt') || '';
+      if (!localUpdatedAt || (cloudUpdatedAt && cloudUpdatedAt > localUpdatedAt)) {
+        var newStr = JSON.stringify(cloudData);
+        if (localStorage.getItem(key) !== newStr) {
+          localStorage.setItem(key, newStr);
+          localStorage.setItem(key + '_updatedAt', cloudUpdatedAt);
+          if (typeof window.refreshAllUI === 'function') {
+            window.refreshAllUI();
+          }
+        }
+      }
+    }
+  } catch(e) { console.warn("handleCloudUpdate error:", key, e); }
+};
+
+// Tự động force-sync khi có mạng lại
+window.addEventListener('online', function() {
+  console.log('🌐 Online — đang đồng bộ lại...');
+  setTimeout(function() { if (window.forceCloudSync) window.forceCloudSync(); }, 1500);
+});
+
+// Các helper khác
 function formatNum(num) { if (num === null || num === undefined || isNaN(num)) return '0'; return Number(num).toLocaleString('vi-VN'); }
 function parseNumOrNull(val) { if (val === '' || val === null || val === undefined) return null; var n = parseFloat(val); return isNaN(n) ? null : n; }
 
@@ -1511,9 +1597,7 @@ function getCustomTasks(key) { try { return JSON.parse(localStorage.getItem(key)
 function setCustomTasks(key, tasks) {
   localStorage.setItem(key, JSON.stringify(tasks));
   localStorage.setItem(key + '_updatedAt', new Date().toISOString());
-  if (window.pushToFirebase) {
-    window.pushToFirebase(key, tasks);
-  }
+  if (window.pushToFirebase) window.pushToFirebase(key, tasks);
 }
 
 function isTapWaterCalcRecord(rec) {
@@ -1624,9 +1708,11 @@ function updateBM02StockLockState() {
 }
 
 function recalculateChemChain() {
-  var list = getStorage(KEYS.chemicals);
+  var allList = getRawStorage(KEYS.chemicals);
+  var list = allList.filter(function(x) { return !x._deleted; });
+  var deletedRecs = allList.filter(function(x) { return x._deleted; });
   if (list.length === 0) return;
-  var original = JSON.stringify(list);
+  var original = JSON.stringify(allList);
   var sorted = [].concat(list).sort(function(a, b) { if (a.date !== b.date) return a.date.localeCompare(b.date); return getShiftOrder(a.shift) - getShiftOrder(b.shift); });
   var prevEnd = null;
   sorted.forEach(function(rec, idx) {
@@ -1645,14 +1731,18 @@ function recalculateChemChain() {
     });
     prevEnd = currentEnd;
   });
-  if (JSON.stringify(sorted) !== original) {
-    setStorage(KEYS.chemicals, sorted);
+  var finalList = sorted.concat(deletedRecs);
+  if (JSON.stringify(finalList) !== original) {
+    setStorage(KEYS.chemicals, finalList);
   }
 }
+
 function recalculateSludgeChain() {
-  var list = getStorage(KEYS.sludge);
+  var allList = getRawStorage(KEYS.sludge);
+  var list = allList.filter(function(x) { return !x._deleted; });
+  var deletedRecs = allList.filter(function(x) { return x._deleted; });
   if (!Array.isArray(list) || list.length === 0) return;
-  var original = JSON.stringify(list);
+  var original = JSON.stringify(allList);
   var sorted = list.slice().sort(function(a, b) {
     var dA = String(a.date || ''), dB = String(b.date || '');
     if (dA !== dB) return dA.localeCompare(dB);
@@ -1668,8 +1758,9 @@ function recalculateSludgeChain() {
     var del = parseFloat(rec.delivered); if (isNaN(del)) del = 0;
     rec.start = start; rec.end = start + gen - del; prevEnd = rec.end;
   }
-  if (JSON.stringify(sorted) !== original) {
-    setStorage(KEYS.sludge, sorted);
+  var finalList = sorted.concat(deletedRecs);
+  if (JSON.stringify(finalList) !== original) {
+    setStorage(KEYS.sludge, finalList);
   }
 }
 function manualSyncSludge() {
@@ -1678,6 +1769,21 @@ function manualSyncSludge() {
   if (!editId) onBM05DateChange();
   showToast('Đã đồng bộ chuỗi tồn bùn!', 'success');
 }
+
+const BM04_TASKS = {
+  daily: ['Trạm bơm đầu vào: Kiểm tra trạng thái hoạt động bơm chìm','Song chắn rác: Xả rác tại máy vớt rác thô/tinh tự động','Máy ép rác: Kiểm tra tình trạng kẹt rác','Hệ thống khí: Kiểm tra áp suất, độ rung nhiệt độ máy thổi khí','Hóa chất: Kiểm tra mức PAC, Polymer, NaOH trong bồn định lượng','Bơm định lượng: Kiểm tra tình trạng chảy của bơm định lượng','Giám sát SCADA: Ghi nhận điện áp, dòng điện, DO, pH, ORP, TSS','Tủ điều khiển: Kiểm tra đèn báo, tín hiệu PLC/SCADA'],
+  weekly: ['Vệ sinh cảm biến: Vệ sinh đầu đo DO, pH, TSS, COD online','Máy ép bùn: Vệ sinh vòi phun rửa băng tải cao áp','Máy ép bùn: Kiểm tra độ lệch băng tải','Máy ép bùn: Kiểm tra hệ thống khí nén căng băng','Máy ép bùn: Xả cặn nước ngưng tụ bình tích khí','Bể lắng: Vệ sinh máng răng cưa bể lắng sinh học','Bể Anoxic: Kiểm tra hoạt động máy khuấy chìm','Cầu gạt bùn: Kiểm tra hoạt động quay'],
+  monthly: ['Tủ điện MCC/PLC: Vệ sinh bụi bẩn','Tủ điện: Siết lại các đầu cọc đấu nối động cơ','Rơ-le nhiệt: Kiểm tra dòng tải','Van bướm: Kiểm tra hoạt động van điều khiển điện/khí nén','Vòng bi: Tra mỡ máy gạt bùn, máy ép bùn','Máy thổi khí: Kiểm tra độ căng dây curoa','Máy thổi khí: Vệ sinh phin lọc gió đầu vào'],
+  quarterly: ['Máy thổi khí: Thay dầu bôi trơn (ISO VG 150/220)','Máy khuấy chìm: Thay dầu hộp số','Bơm chìm: Đo điện trở cách điện (Megohmmeter)','Bơm chìm: Kiểm tra độ mòn cánh bơm, phớt cơ khí','Thiết bị đo: Hiệu chuẩn toàn bộ thiết bị đo lường online','Hệ thống khí: Kiểm tra áp suất bình tích khí'],
+  yearly: ['Đại tu bơm RAS/WAS: Tháo kiểm tra, thay thế vòng bi','Đại tu bơm RAS/WAS: Thay thế phớt cơ khí','Đại tu máy thổi khí: Tháo kiểm tra vòng bi, phớt','Hệ thống đĩa phân phối khí: Rút nước kiểm tra đĩa EDI/Jaeger','Đĩa phân phối khí: Thay thế đĩa bị rách, nghẹt cáu cặn','Bình chịu áp lực: Kiểm định an toàn','Hệ thống chống sét: Kiểm tra tiếp địa, chống sét','Thiết bị nâng hạ: Kiểm tra pa-păng trạm bơm','Đồng hồ đo lưu lượng: Hiệu chuẩn đồng hồ điện từ']
+};
+
+const BM06_TASKS = [
+  'Kiểm tra mực nước bể điều hòa','Kiểm tra độ đục, màu sắc nước đầu ra','Vệ sinh bơm định lượng & ống dẫn hóa chất',
+  'Ghi chép chỉ số đồng hồ điện, nước','Thu gom rác tại hố thu','Vệ sinh khu vực nhà điều hành'
+];
+
+const COST_WARNING_TEXT = 'Đây là chi phí gần đúng nhằm mục đích tham khảo nội bộ, không chính xác 100%.';
 
 function generateBM04Tasks() {
   const freq = document.getElementById('bm04-frequency').value;
@@ -1731,9 +1837,9 @@ function saveBM04(e) {
   const mainChecked = Array.from(document.querySelectorAll('#bm04-task-list input[type="checkbox"]:checked')).map(x => x.value);
   const freq = document.getElementById('bm04-frequency').value;
   const freqText = { daily: 'Hàng ngày', weekly: 'Hàng tuần', monthly: 'Hàng tháng', quarterly: 'Hàng quý', yearly: 'Hàng năm' };
-  const item = { id: id || generateId(), date: document.getElementById('bm04-date').value, approver: document.getElementById('bm04-approver').value, frequency: freq, frequencyText: freqText[freq] || freq, tasks: mainChecked, notes: document.getElementById('bm04-notes').value, incidents: document.getElementById('bm04-incidents').value };
-  let list = getStorage(KEYS.maintenance);
-  if (id) { const idx = list.findIndex(x => x.id === id); if (idx !== -1) list[idx] = item; } else { list.unshift(item); }
+  const item = { id: id || generateId(), _ts: Date.now(), date: document.getElementById('bm04-date').value, approver: document.getElementById('bm04-approver').value, frequency: freq, frequencyText: freqText[freq] || freq, tasks: mainChecked, notes: document.getElementById('bm04-notes').value, incidents: document.getElementById('bm04-incidents').value };
+  let list = getRawStorage(KEYS.maintenance);
+  if (id) { const idx = list.findIndex(x => x.id === id); if (idx !== -1) list[idx] = item; else list.push(item); } else { list.unshift(item); }
   setStorage(KEYS.maintenance, list);
   showToast('Lưu phiếu bảo trì thành công!', 'success');
   cancelEditBM04(); renderBM04Table(); updateDashboard();
@@ -1775,9 +1881,9 @@ function cancelEditBM04() {
 }
 function deleteBM04(id) {
   showConfirm('Xóa phiếu bảo trì', 'Bạn có chắc chắn muốn xóa bản ghi bảo trì này?', () => {
-    let list = getStorage(KEYS.maintenance);
-    list = list.filter(x => x.id !== id);
-    setStorage(KEYS.maintenance, list);
+    let list = getRawStorage(KEYS.maintenance);
+    let idx = list.findIndex(x => x.id === id);
+    if (idx >= 0) { list[idx]._deleted = true; list[idx]._ts = Date.now(); setStorage(KEYS.maintenance, list); }
     showToast('Đã xóa bảo trì', 'success'); renderBM04Table(); updateDashboard();
   });
 }
@@ -1828,9 +1934,9 @@ function saveBM06(e) {
   e.preventDefault();
   var id = document.getElementById('bm06-edit-id').value;
   var checked = Array.from(document.querySelectorAll('input[name="bm06-task"]:checked')).map(x => x.value);
-  var item = { id: id || generateId(), date: document.getElementById('bm06-date').value, shift: document.getElementById('bm06-shift').value, staff: document.getElementById('bm06-staff').value, startTime: document.getElementById('bm06-start').value, tasks: checked, notes: document.getElementById('bm06-notes').value, incidents: document.getElementById('bm06-incidents').value };
-  var list = getStorage(KEYS.operationLogs);
-  if (id) { var idx = list.findIndex(x => x.id === id); if (idx !== -1) list[idx] = item; } else { list.unshift(item); }
+  var item = { id: id || generateId(), _ts: Date.now(), date: document.getElementById('bm06-date').value, shift: document.getElementById('bm06-shift').value, staff: document.getElementById('bm06-staff').value, startTime: document.getElementById('bm06-start').value, tasks: checked, notes: document.getElementById('bm06-notes').value, incidents: document.getElementById('bm06-incidents').value };
+  var list = getRawStorage(KEYS.operationLogs);
+  if (id) { var idx = list.findIndex(x => x.id === id); if (idx !== -1) list[idx] = item; else list.push(item); } else { list.unshift(item); }
   setStorage(KEYS.operationLogs, list);
   showToast('Lưu nhật ký vận hành thành công!', 'success');
   cancelEditBM06(); renderBM06Table(); updateDashboard();
@@ -1873,8 +1979,9 @@ function cancelEditBM06() {
 }
 function deleteBM06(id) {
   showConfirm('Xóa nhật ký', 'Bạn có chắc chắn muốn xóa bản ghi này?', () => {
-    var list = getStorage(KEYS.operationLogs).filter(x => x.id !== id);
-    setStorage(KEYS.operationLogs, list);
+    var list = getRawStorage(KEYS.operationLogs);
+    var idx = list.findIndex(x => x.id === id);
+    if (idx >= 0) { list[idx]._deleted = true; list[idx]._ts = Date.now(); setStorage(KEYS.operationLogs, list); }
     showToast('Đã xóa', 'success'); renderBM06Table(); updateDashboard();
   });
 }
@@ -1887,7 +1994,7 @@ function saveBM01(e) {
   var tapWaterStored = '';
   if (shift === TAPWATER_SHIFT && tapWaterVal !== '') tapWaterStored = parseFloat(tapWaterVal) || 0;
   var item = {
-    id: id || generateId(), date: document.getElementById('bm01-date').value, shift: shift,
+    id: id || generateId(), _ts: Date.now(), date: document.getElementById('bm01-date').value, shift: shift,
     handover: document.getElementById('bm01-handover').value,
     receiver: document.getElementById('bm01-receiver').value,
     inflow: parseFloat(document.getElementById('bm01-inflow').value) || 0,
@@ -1899,8 +2006,8 @@ function saveBM01(e) {
     levels: { pac: document.getElementById('bm01-pac-lvl').value, naoh: document.getElementById('bm01-naoh-lvl').value, clo: document.getElementById('bm01-clo-lvl').value, pola: document.getElementById('bm01-pola-lvl').value, matri: document.getElementById('bm01-matri-lvl').value },
     notes: document.getElementById('bm01-notes').value
   };
-  var list = getStorage(KEYS.handovers);
-  if (id) { var idx = list.findIndex(x => x.id === id); if (idx !== -1) list[idx] = item; } else { list.unshift(item); }
+  var list = getRawStorage(KEYS.handovers);
+  if (id) { var idx = list.findIndex(x => x.id === id); if (idx !== -1) list[idx] = item; else list.push(item); } else { list.unshift(item); }
   setStorage(KEYS.handovers, list);
   if (shift !== TAPWATER_SHIFT && tapWaterVal !== '') showToast('Lưu giao ca thành công (chỉ số nước máy chỉ được lưu ở Ca 3).', 'warning');
   else showToast('Lưu giao ca thành công!', 'success');
@@ -1966,8 +2073,9 @@ function cancelEditBM01() {
 }
 function deleteBM01(id) {
   showConfirm('Xóa giao ca', 'Bạn có chắc chắn muốn xóa lượt giao ca này?', () => {
-    var list = getStorage(KEYS.handovers).filter(x => x.id !== id);
-    setStorage(KEYS.handovers, list);
+    var list = getRawStorage(KEYS.handovers);
+    var idx = list.findIndex(x => x.id === id);
+    if (idx >= 0) { list[idx]._deleted = true; list[idx]._ts = Date.now(); setStorage(KEYS.handovers, list); }
     showToast('Đã xóa', 'success'); renderBM01Table(); updateDashboard();
   });
 }
@@ -2052,15 +2160,15 @@ function saveBM02() {
     var outVal = parseFloat(document.getElementById('bm02-' + c.key + '-out').value) || 0;
     items[c.key] = { start: start, in: inVal, out: outVal, end: start + inVal - outVal };
   });
-  var list = getStorage(KEYS.chemicals);
+  var list = getRawStorage(KEYS.chemicals);
   var editId = document.getElementById('bm02-edit-id').value;
   if (editId) {
     var idx = list.findIndex(x => x.id === editId);
-    if (idx !== -1) list[idx] = { id: editId, date: date, shift: shift, items: items };
+    if (idx !== -1) list[idx] = { id: editId, _ts: Date.now(), date: date, shift: shift, items: items };
   } else {
-    var existIdx = list.findIndex(x => x.date === date && x.shift === shift);
-    if (existIdx !== -1) list[existIdx] = { id: list[existIdx].id, date: date, shift: shift, items: items };
-    else list.push({ id: generateId(), date: date, shift: shift, items: items });
+    var existIdx = list.findIndex(x => x.date === date && x.shift === shift && !x._deleted);
+    if (existIdx !== -1) list[existIdx] = { id: list[existIdx].id, _ts: Date.now(), date: date, shift: shift, items: items };
+    else list.push({ id: generateId(), _ts: Date.now(), date: date, shift: shift, items: items });
   }
   setStorage(KEYS.chemicals, list);
   recalculateChemChain();
@@ -2118,8 +2226,9 @@ function cancelEditBM02() {
 }
 function deleteBM02(id) {
   showConfirm('Xóa dữ liệu hóa chất', 'Bạn có chắc chắn muốn xóa?', () => {
-    var list = getStorage(KEYS.chemicals).filter(x => x.id !== id);
-    setStorage(KEYS.chemicals, list);
+    var list = getRawStorage(KEYS.chemicals);
+    var idx = list.findIndex(x => x.id === id);
+    if (idx >= 0) { list[idx]._deleted = true; list[idx]._ts = Date.now(); setStorage(KEYS.chemicals, list); }
     recalculateChemChain();
     showToast('Đã xóa và cập nhật chuỗi tồn kho.', 'success');
     renderBM02Table(); updateDashboard();
@@ -2130,7 +2239,7 @@ function saveBM03(e) {
   e.preventDefault();
   var id = document.getElementById('bm03-edit-id').value;
   var item = {
-    id: id || generateId(), date: document.getElementById('bm03-date').value,
+    id: id || generateId(), _ts: Date.now(), date: document.getElementById('bm03-date').value,
     shift: document.getElementById('bm03-shift').value, time: document.getElementById('bm03-time').value,
     location: document.getElementById('bm03-location').value,
     ph: parseNumOrNull(document.getElementById('bm03-ph').value),
@@ -2141,8 +2250,8 @@ function saveBM03(e) {
     other: document.getElementById('bm03-other').value,
     staff: document.getElementById('bm03-staff').value
   };
-  var list = getStorage(KEYS.waterTests);
-  if (id) { var idx = list.findIndex(x => x.id === id); if (idx !== -1) list[idx] = item; } else { list.unshift(item); }
+  var list = getRawStorage(KEYS.waterTests);
+  if (id) { var idx = list.findIndex(x => x.id === id); if (idx !== -1) list[idx] = item; else list.push(item); } else { list.unshift(item); }
   setStorage(KEYS.waterTests, list);
   showToast('Lưu kết quả test thành công!', 'success');
   cancelEditBM03(); renderBM03List(); updateDashboard();
@@ -2199,8 +2308,9 @@ function cancelEditBM03() {
 }
 function deleteBM03(id) {
   showConfirm('Xóa mẫu test', 'Bạn có chắc chắn muốn xóa mẫu test này?', () => {
-    var list = getStorage(KEYS.waterTests).filter(x => x.id !== id);
-    setStorage(KEYS.waterTests, list);
+    var list = getRawStorage(KEYS.waterTests);
+    var idx = list.findIndex(x => x.id === id);
+    if (idx >= 0) { list[idx]._deleted = true; list[idx]._ts = Date.now(); setStorage(KEYS.waterTests, list); }
     showToast('Đã xóa', 'success'); renderBM03List(); updateDashboard();
   });
 }
@@ -2260,19 +2370,19 @@ function saveBM05(e) {
   var gen = parseFloat(document.getElementById('bm05-sludge-gen').value) || 0;
   var del = parseFloat(document.getElementById('bm05-sludge-deliv').value) || 0;
   var item = {
-    id: id || generateId(), date: document.getElementById('bm05-date').value,
+    id: id || generateId(), _ts: Date.now(), date: document.getElementById('bm05-date').value,
     shift: document.getElementById('bm05-shift').value, staff: document.getElementById('bm05-staff').value,
     start: start, generated: gen, delivered: del, end: start + gen - del,
     polc: parseFloat(document.getElementById('bm05-polc').value) || 0,
     bags: parseInt(document.getElementById('bm05-bags').value) || 0,
     dryWeight: parseFloat(document.getElementById('bm05-weight').value) || null
   };
-  var list = getStorage(KEYS.sludge);
+  var list = getRawStorage(KEYS.sludge);
   if (id) {
     var idx = list.findIndex(x => x.id === id);
     if (idx !== -1) list[idx] = item; else list.push(item);
   } else {
-    var existIdx = list.findIndex(x => x.date === item.date && x.shift === item.shift);
+    var existIdx = list.findIndex(x => x.date === item.date && x.shift === item.shift && !x._deleted);
     if (existIdx !== -1) { item.id = list[existIdx].id; list[existIdx] = item; } else list.push(item);
   }
   setStorage(KEYS.sludge, list);
@@ -2320,8 +2430,9 @@ function cancelEditBM05() {
 }
 function deleteBM05(id) {
   showConfirm('Xóa nhật ký ép bùn', 'Bạn có chắc chắn muốn xóa?', () => {
-    var list = getStorage(KEYS.sludge).filter(x => x.id !== id);
-    setStorage(KEYS.sludge, list);
+    var list = getRawStorage(KEYS.sludge);
+    var idx = list.findIndex(x => x.id === id);
+    if (idx >= 0) { list[idx]._deleted = true; list[idx]._ts = Date.now(); setStorage(KEYS.sludge, list); }
     recalculateSludgeChain();
     showToast('Đã xóa và đồng bộ chuỗi tồn.', 'success');
     renderBM05Table(); updateDashboard();
@@ -2744,12 +2855,12 @@ function refreshExcelPreview() {
     rawData = allData;
     var fieldSet = new Set();
     rawData.forEach(item => { Object.keys(item).forEach(k => fieldSet.add(k)); });
-    columns = Array.from(fieldSet).filter(k => k !== '_source');
+    columns = Array.from(fieldSet).filter(k => !['_source'].concat(META_FIELDS).includes(k));
     columns = ['_source'].concat(columns);
   } else {
     var keyMap = { handovers: KEYS.handovers, chemicals: KEYS.chemicals, waterTests: KEYS.waterTests, maintenance: KEYS.maintenance, sludge: KEYS.sludge, operationLogs: KEYS.operationLogs };
     var key = keyMap[type];
-    if (key) { rawData = getStorage(key, []); if (rawData.length > 0) columns = Object.keys(rawData[0]); }
+    if (key) { rawData = getStorage(key, []); if (rawData.length > 0) columns = Object.keys(rawData[0]).filter(k => !META_FIELDS.includes(k)); }
   }
   if (s) rawData = rawData.filter(item => item.date >= s);
   if (e) rawData = rawData.filter(item => item.date <= e);
@@ -2764,7 +2875,7 @@ function renderExcelPreview(data, columns) {
   var thead = document.getElementById('excel-preview-head');
   var tbody = document.getElementById('excel-preview-body');
   var headerLabels = { '_source': 'Nguồn', 'date': 'Ngày', 'shift': 'Ca', 'handover': 'Bàn giao', 'receiver': 'Tiếp nhận', 'inflow': 'Nước vào (m³)', 'outflow': 'Nước ra (m³)', 'elec': 'Điện (kWh)', 'tapWater': 'Chỉ số nước máy VTL', 'staff': 'NV', 'location': 'Vị trí', 'ph': 'pH', 'clo': 'Clo', 'do': 'DO', 'n': 'NH4', 'f': 'Florua', 'start': 'Tồn đầu', 'generated': 'Ép', 'delivered': 'Giao', 'end': 'Tồn cuối', 'polc': 'Polymer-C', 'bags': 'Bao', 'tasks': 'Công việc', 'incidents': 'Sự cố', 'notes': 'Ghi chú' };
-  var displayColumns = columns.filter(col => !['id', '_source', 'items', 'levels', 'otherTasks', 'approvedBy', 'frequency', 'frequencyText', 'dryWeight', 'startTime', 'scada', 'monitor'].includes(col));
+  var displayColumns = columns.filter(col => !['id', '_source', 'items', 'levels', 'otherTasks', 'approvedBy', 'frequency', 'frequencyText', 'dryWeight', 'startTime', 'scada', 'monitor'].concat(META_FIELDS).includes(col));
   var priorityCols = ['date', 'shift', 'handover', 'receiver', 'inflow', 'outflow', 'elec', 'tapWater', 'staff', 'location', 'ph', 'clo', 'do', 'n', 'tasks', 'incidents', 'notes'];
   displayColumns.sort((a, b) => { var ai = priorityCols.indexOf(a), bi = priorityCols.indexOf(b); if (ai === -1 && bi === -1) return a.localeCompare(b); if (ai === -1) return 1; if (bi === -1) return -1; return ai - bi; });
   if (excelCurrentType === 'all') displayColumns.unshift('_source');
@@ -2787,6 +2898,7 @@ function downloadExcelFromModal() {
   if (excelDataCache.length === 0) { showToast('Không có dữ liệu để xuất!', 'warning'); return; }
   var exportData = excelDataCache.map(item => {
     var n = Object.assign({}, item);
+    META_FIELDS.forEach(f => { delete n[f]; });
     if (typeof n.items === 'object') {
       if (excelCurrentType === 'chemicals') {
         var chemData = n.items;
@@ -2832,10 +2944,10 @@ function exportBackup() {
   var backup = {};
   Object.keys(KEYS).forEach(k => {
     var defVal = (k === 'settings') ? DEFAULT_SETTINGS : [];
-    backup[KEYS[k]] = getStorage(KEYS[k], defVal);
+    backup[KEYS[k]] = getRawStorage(KEYS[k], defVal);
   });
-  backup[CUSTOM_TASKS_BM04_KEY] = getCustomTasks(CUSTOM_TASKS_BM04_KEY);
-  backup[CUSTOM_TASKS_BM06_KEY] = getCustomTasks(CUSTOM_TASKS_BM06_KEY);
+  backup[CUSTOM_TASKS_BM04_KEY] = getRawStorage(CUSTOM_TASKS_BM04_KEY, []);
+  backup[CUSTOM_TASKS_BM06_KEY] = getRawStorage(CUSTOM_TASKS_BM06_KEY, []);
   backup['songmay_tqt_log_v1'] = (function(){ try { return JSON.parse(localStorage.getItem('songmay_tqt_log_v1')); } catch(e){ return null; } })();
   var dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backup, null, 2));
   var a = document.createElement('a');
@@ -2869,7 +2981,7 @@ function importBackup(e) {
 
       Object.keys(data).forEach(k => {
         localStorage.setItem(k, JSON.stringify(data[k]));
-        localStorage.setItem(k + '_updatedAt', nowISO); // Ép thời gian mới để đẩy lên mây
+        localStorage.setItem(k + '_updatedAt', nowISO);
         if (window.pushToFirebase) window.pushToFirebase(k, data[k]);
       });
 
@@ -3286,7 +3398,7 @@ function refreshTabData(target) {
   else if (target === 'settings') loadSettings();
 }
 
-// HÀM CẬP NHẬT UI AN TOÀN KHI CÓ DỮ LIỆU TỪ MÁY KHÁC (Không đè form đang nhập)
+// Refresh an toàn khi cloud có data mới — KHÔNG đụng form đang nhập
 let syncTimeout;
 window.refreshAllUI = function() {
   clearTimeout(syncTimeout);
@@ -3301,13 +3413,13 @@ window.refreshAllUI = function() {
         renderBM01Table();
         updateBM01TapWaterHint();
       } else if (target === 'bm02') {
-        renderBM02Table(); // KHÔNG renderBM02Form
+        renderBM02Table();
       } else if (target === 'bm03') {
         renderBM03List();
       } else if (target === 'bm04') {
-        renderBM04Table(); // KHÔNG generateBM04Tasks
+        renderBM04Table();
       } else if (target === 'bm05') {
-        renderBM05Table(); // KHÔNG recalculateSludgeChain
+        renderBM05Table();
       } else if (target === 'bm06') {
         renderBM06Table();
       } else if (target === 'bm07') {
